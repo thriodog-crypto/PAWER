@@ -670,6 +670,15 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 .zone-badges .complete { color: var(--green); }
 .choice-row.bodyweight-metrics { grid-template-columns: 1fr; }
 
+.muscle-reminder { margin: 14px 0 20px; padding: 16px; border: 1px solid rgb(var(--accent-rgb) / .3); border-radius: 22px; background: linear-gradient(150deg, rgb(var(--panel-light-rgb) / var(--panel-alpha)), rgb(var(--panel-dark-rgb) / var(--panel-alpha))); box-shadow: var(--shadow); backdrop-filter: blur(14px); }
+.muscle-reminder-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.muscle-reminder-head h2 { margin: 3px 0 0; font-size: 1.2rem; }
+.muscle-reminder-head > span { flex: 0 0 auto; padding: 6px 9px; border-radius: 999px; color: var(--green); background: rgb(var(--accent-rgb) / .1); border: 1px solid rgb(var(--accent-rgb) / .18); font-size: .68rem; font-weight: 800; }
+.muscle-reminder-grid { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.muscle-reminder-grid > div { min-height: 64px; padding: 10px; display: grid; align-content: center; gap: 3px; border-radius: 14px; background: rgb(var(--panel-deep-rgb) / .68); border: 1px solid var(--line); }
+.muscle-reminder-grid small, .muscle-reminder > p { color: var(--muted); font-size: .68rem; }
+.muscle-reminder > p { margin: 12px 0 0; }
+
 .exercise-catalog .catalog-list { gap: 10px; }
 .exercise-catalog .catalog-row { min-height: 0; padding: 14px; display: grid; grid-template-columns: 1fr; gap: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgb(var(--panel-deep-rgb) / .62); }
 .catalog-row-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -700,4 +709,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
   .catalog-fields { grid-template-columns: 1fr; }
   .catalog-fields .catalog-note { grid-column: 1; }
   .backup-file-actions { grid-template-columns: 1fr; }
+  .muscle-reminder-grid { grid-template-columns: 1fr 1fr; }
+  .muscle-reminder-head { align-items: flex-start; }
 }

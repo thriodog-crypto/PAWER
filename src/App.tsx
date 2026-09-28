@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActualSet, AppState, BodyWeightEntry, ExerciseDefinition, LoadType, MeasurementEntry, Program, ProgramExercise, SaveStatus, WeightUnit, Workout } from './types'
 import { backupJson, createAutoSnapshotIfNeeded, createLocalSnapshot, emptyState, listLocalSnapshots, loadState, parseBackup, saveState } from './storage'
 import type { LocalSnapshot } from './storage'
-import { compareSets, continueFreeWorkout, displayWeight, makeExercise, makeProgram, makeSet, nextPosition, normalizeSet, parseDecimal, parseReps, previousWorkoutForExercise, removeExerciseDefinition, startWorkout, switchExerciseUnit, timerRemaining, toKg, trainingSummary, uid, workoutVolumeKg } from './domain'
+import { categoryTrainingActivity, compareSets, continueFreeWorkout, displayWeight, makeExercise, makeProgram, makeSet, nextPosition, normalizeSet, parseDecimal, parseReps, previousWorkoutForExercise, removeExerciseDefinition, startWorkout, switchExerciseUnit, timerRemaining, toKg, trainingSummary, uid, workoutVolumeKg } from './domain'
 
 type Tab = 'home' | 'workouts' | 'progress' | 'profile'
 type ProgressTab = 'strength' | 'body' | 'measurements'
@@ -257,6 +257,8 @@ export default function App() {
 
 function Home({ data, activeWorkout, onContinue, onStart, onPrograms, onEdit }: { data: AppState; activeWorkout?: Workout; onContinue: () => void; onStart: (program: Program | null) => void; onPrograms: () => void; onEdit: (id: string) => void }) {
   const latest = data.workouts.find(w => w.status === 'completed')
+  const muscleActivity = categoryTrainingActivity(data, EXERCISE_ZONES.map(zone => zone.value))
+  const staleMuscles = muscleActivity.filter(item => item.daysAgo === null || item.daysAgo >= 7).sort((a, b) => (b.daysAgo ?? Number.MAX_SAFE_INTEGER) - (a.daysAgo ?? Number.MAX_SAFE_INTEGER))
   return <>
     <section className="home-hero">
       <div className="hero-copy"><p className="eyebrow">Тренируйся в своём ритме</p><h1>{activeWorkout ? 'Тренировка ждёт продолжения' : 'Что сегодня в плане?'}</h1>
@@ -268,6 +270,8 @@ function Home({ data, activeWorkout, onContinue, onStart, onPrograms, onEdit }: 
       <button className="quick-card" onClick={() => onStart(null)}><span className="quick-icon">＋</span><strong>Свободная тренировка</strong><small>Добавляй по ходу</small></button>
       <button className="quick-card" onClick={onPrograms}><span className="quick-icon">≡</span><strong>Мои программы</strong><small>{data.programs.length || 'Пока нет'}</small></button>
     </section>
+
+    {latest && <section className="muscle-reminder"><div className="muscle-reminder-head"><div><p className="eyebrow">Баланс тренировок</p><h2>Какие мышцы давно не тренировались</h2></div><span>{staleMuscles.length ? `${staleMuscles.length} из ${EXERCISE_ZONES.length}` : 'Всё свежее ✓'}</span></div>{staleMuscles.length ? <div className="muscle-reminder-grid">{staleMuscles.map(item => { const zone = EXERCISE_ZONES.find(candidate => candidate.value === item.category)!; return <div key={item.category}><strong>{zone.label}</strong><small>{item.daysAgo === null ? 'Ещё не тренировались' : item.daysAgo === 7 ? '7 дней назад' : `${item.daysAgo} дн. назад`}</small></div> })}</div> : <p>Все отмеченные группы мышц были в работе за последние 7 дней.</p>}</section>}
 
     <section className="section-head"><div><p className="eyebrow">Программы</p><h2>Быстрый старт</h2></div><button className="text-button" onClick={onPrograms}>Все</button></section>
     {data.programs.length ? <div className="card-stack">{data.programs.slice(0, 3).map(program => <article className="program-card" key={program.id}>

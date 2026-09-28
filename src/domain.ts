@@ -183,6 +183,26 @@ export function trainingSummary(state: AppState, days = 7, now = Date.now()): Tr
   }
 }
 
+export interface CategoryActivity {
+  category: string
+  lastTrainedAt?: string
+  daysAgo: number | null
+}
+
+export function categoryTrainingActivity(state: AppState, categories: readonly string[], now = Date.now()): CategoryActivity[] {
+  return categories.map(category => {
+    const timestamps = state.workouts.filter(workout => workout.status === 'completed').flatMap(workout => {
+      const trained = workout.exercises.some(exercise => {
+        const definition = state.definitions.find(item => item.id === exercise.exerciseDefinitionId)
+        return definition?.category === category && exercise.sets.some(set => set.status === 'completed')
+      })
+      return trained ? [workout.finishedAt ?? workout.startedAt] : []
+    })
+    const lastTrainedAt = timestamps.sort((a, b) => Date.parse(b) - Date.parse(a))[0]
+    return { category, lastTrainedAt, daysAgo: lastTrainedAt ? Math.max(0, Math.floor((now - Date.parse(lastTrainedAt)) / 86400000)) : null }
+  })
+}
+
 export function removeExerciseDefinition(state: AppState, definitionId: string): 'merged' | 'archived' | 'deleted' | 'missing' {
   const definition = state.definitions.find(item => item.id === definitionId)
   if (!definition) return 'missing'
