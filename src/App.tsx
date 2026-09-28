@@ -435,7 +435,6 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
 
 function ExercisePicker({ definitions, currentDefinitionId, onClose, onSelect, onCreate, mode = 'replace' }: { definitions: ExerciseDefinition[]; currentDefinitionId: string; onClose: () => void; onSelect: (definition: ExerciseDefinition) => void; onCreate: (name: string, category?: string) => void; mode?: 'replace' | 'add' }) {
   const [query, setQuery] = useState('')
-  const [newName, setNewName] = useState('')
   const [newCategory, setNewCategory] = useState('')
   const normalizedQuery = query.trim().toLocaleLowerCase('ru')
   const available = definitions
@@ -443,18 +442,17 @@ function ExercisePicker({ definitions, currentDefinitionId, onClose, onSelect, o
     .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
   const sections = [...EXERCISE_ZONES, { value: '', label: 'Без зоны' }]
   const create = () => {
-    const name = newName.trim()
+    const name = query.trim()
     if (!name) return
     onCreate(name, newCategory || undefined)
   }
   return <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-label={mode === 'add' ? 'Следующее упражнение' : 'Поменять упражнение'}><div className="sheet exercise-picker"><div className="sheet-head"><div><small>Текущая тренировка</small><h2>{mode === 'add' ? 'Следующее упражнение' : 'Поменять упражнение'}</h2></div><button aria-label="Закрыть" onClick={onClose}>×</button></div>
-    <label className="picker-search">Найти среди ранее добавленных<input autoFocus value={query} placeholder="Название упражнения" onChange={event => setQuery(event.target.value)} /></label>
+    <label className="picker-search">Найти или добавить упражнение<input autoFocus value={query} placeholder="Введите название" onChange={event => setQuery(event.target.value)} /></label>
     <div className="sheet-scroll exercise-groups">{sections.map(section => {
       const items = available.filter(definition => section.value ? definition.category === section.value : !EXERCISE_ZONES.some(zone => zone.value === definition.category))
       if (!items.length) return null
       return <section className={`exercise-group ${section.value ? '' : 'unassigned'}`} key={section.value || 'unassigned'}><h3>{section.label}</h3><div>{items.map(definition => <button className="exercise-choice" key={definition.id} onClick={() => onSelect(definition)}><span>{definition.name}</span><strong>Выбрать</strong></button>)}</div></section>
-    })}{!available.length && <p className="picker-empty">Подходящих сохранённых упражнений нет.</p>}</div>
-    <section className="picker-create"><h3>Или добавить новое</h3><input value={newName} placeholder="Название упражнения" onChange={event => setNewName(event.target.value)} /><select aria-label="Зона нового упражнения" value={newCategory} onChange={event => setNewCategory(event.target.value)}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select><button className="primary wide" disabled={!newName.trim()} onClick={create}>Создать и выбрать</button></section>
+    })}{!available.length && (query.trim() ? <section className="picker-create"><small>Такого упражнения ещё нет</small><strong>«{query.trim()}»</strong><select aria-label="Зона нового упражнения" value={newCategory} onChange={event => setNewCategory(event.target.value)}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select><button className="primary wide" onClick={create}>＋ Добавить новое упражнение</button></section> : <p className="picker-empty">Начни вводить название — здесь появятся совпадения.</p>)}</div>
   </div></div>
 }
 
