@@ -492,10 +492,11 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
         <section className="actual-panel"><div className="actual-panel-heading"><h2>Сейчас</h2><label>Тип нагрузки<select value={exercise.loadType} onChange={e => update(draft => { const ex = draft.workouts.find(x => x.id === workout.id)?.exercises[workout.currentExerciseIndex]; if (ex) applyLoadType(ex, e.target.value as LoadType) })}><option value="external">С отягощением</option><option value="bodyweight">Собственный вес</option><option value="assisted">С противовесом</option></select></label></div>{exercise.loadType === 'bodyweight' && <p className="bodyweight-hint runner-bodyweight-hint">Вес вводить не нужно — запиши только повторения.</p>}<div className={`actual-inputs ${exercise.loadType === 'bodyweight' ? 'bodyweight-inputs' : ''}`}>
           {exercise.loadType !== 'bodyweight' && <><label><span>{exercise.loadType === 'assisted' ? 'Помощь' : 'Вес'}, {weightUnitLabel(exercise.unit)}</span><input inputMode="decimal" value={set.actualWeightInput} placeholder="—" onChange={e => editActual('actualWeightInput', e.target.value)} /></label><span className="multiply">×</span></>}<label><span>Повторения</span><input inputMode="numeric" value={set.actualRepsInput} placeholder="—" onChange={e => editActual('actualRepsInput', e.target.value)} /></label>
         </div><div className="quick-set-tools"><button onClick={() => fillSet(lastCompletedSet ?? previousSet)}>↺ Прошлый подход</button><button onClick={bumpReps}>＋1 повтор</button>{exercise.loadType !== 'bodyweight' && <button onClick={bumpWeight}>＋{exercise.unit === 'kg' ? '2,5' : '5'} {weightUnitLabel(exercise.unit)}</button>}</div>{!valid && <p className="field-error">Заполни корректные фактические значения.</p>}</section>
-        <div className="runner-links"><button onClick={skipSet}>Пропустить подход</button><button onClick={skipExercise}>Пропустить упражнение</button></div>
-        <div className="runner-secondary-actions">
-          <button className="secondary replace-workout-exercise" aria-label="Поменять упражнение" onClick={() => setShowReplace(true)}>⇄ Поменять</button>
-          <button className="secondary add-workout-exercise" aria-label="Добавить упражнение" onClick={() => setShowAdd(true)}>＋ Добавить упражнение</button>
+        <div className="runner-utility-actions">
+          <button aria-label="Пропустить подход" onClick={skipSet}>— Подход</button>
+          <button aria-label="Пропустить упражнение" onClick={skipExercise}>— Упр.</button>
+          <button aria-label="Поменять упражнение" onClick={() => setShowReplace(true)}>⇄ Сменить</button>
+          <button aria-label="Добавить упражнение" onClick={() => setShowAdd(true)}>＋ Добавить</button>
         </div>
         <button className="complete-set" disabled={!valid || set.status === 'completed'} onClick={confirmSet}>{set.status === 'completed' ? '✓ Подход выполнен' : '✓ Выполнил подход'}</button>
       </>}

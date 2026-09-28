@@ -181,6 +181,8 @@ h3 { font-size: 1.05rem; }
 .runner-links button { min-height: 48px; border: 0; background: transparent; color: var(--muted); font-size: .78rem; text-decoration: underline; }
 .runner-secondary-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 2px; }
 .runner-secondary-actions button { min-width: 0; min-height: 46px; padding: 0 8px; border-radius: 14px; font-size: .8rem; }
+.runner-utility-actions { margin-top: 6px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.runner-utility-actions button { min-width: 0; min-height: 46px; padding: 3px 4px; border: 1px solid rgb(var(--accent-rgb) / .28); border-radius: 13px; color: var(--green); background: rgb(var(--accent-rgb) / .08); font-size: .67rem; font-weight: 800; line-height: 1.15; }
 .runner-footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; min-height: 70px; padding: 8px max(14px, calc((100% - 720px)/2)) calc(8px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.96); border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .runner-footer button { min-height: 52px; padding: 0 14px; border: 0; border-radius: 14px; background: var(--mint-soft); color: var(--green-dark); font-weight: 800; }
 .runner-empty { width: min(100% - 28px, 560px); margin: 18vh auto 0; padding: 24px; text-align: center; background: #fff; border: 1px solid var(--line); border-radius: 24px; }
@@ -791,4 +793,37 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
   .muscle-reminder-grid { grid-template-columns: 1fr 1fr; }
   .muscle-reminder-head { align-items: flex-start; }
   .achievement-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) and (max-height: 920px) {
+  .workout-shell { height: 100dvh; min-height: 0; overflow: hidden; padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .runner-header { min-height: calc(64px + env(safe-area-inset-top)); padding-top: calc(7px + env(safe-area-inset-top)); padding-bottom: 7px; }
+  .workout-progress { top: calc(64px + env(safe-area-inset-top)); }
+  .runner-content { padding: 7px 0 3px; }
+  .runner-title { align-items: center; gap: 8px; }
+  .runner-title .eyebrow { margin-bottom: 3px; font-size: .63rem; }
+  .runner-title h1 { margin: 0; font-size: 1.48rem; }
+  .runner-title p:not(.eyebrow) { display: none; }
+  .list-button { min-width: 62px; min-height: 38px; font-size: .72rem; }
+  .set-focus { margin: 6px 0 8px; padding: 9px 12px; border-radius: 18px; }
+  .set-counter { line-height: 1; }
+  .set-counter strong { font-size: 1.72rem; }
+  .plan-line { margin-top: 3px; font-size: .83rem; }
+  .previous-line { min-height: 18px; margin-top: 5px; padding-top: 5px; font-size: .67rem; }
+  .actual-panel { padding: 11px 12px; border-radius: 18px; }
+  .actual-panel-heading { align-items: center; margin-bottom: 7px; }
+  .actual-panel-heading h2 { font-size: 1.08rem; }
+  .actual-panel-heading label { gap: 2px; font-size: .58rem; }
+  .actual-panel-heading select { min-height: 36px; max-width: 176px; font-size: .68rem; }
+  .actual-inputs input { min-height: 52px; font-size: 1.35rem; }
+  .multiply { height: 52px; font-size: 1.1rem; }
+  .actual-inputs label { gap: 4px; font-size: .65rem; }
+  .quick-set-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 6px; }
+  .quick-set-tools button, .quick-set-tools button:first-child { grid-column: auto; min-height: 36px; padding: 3px; font-size: .57rem; }
+  .field-error { margin-top: 5px; font-size: .65rem; }
+  .runner-utility-actions { margin-top: 5px; gap: 5px; }
+  .runner-utility-actions button { min-height: 42px; padding: 2px; font-size: .58rem; }
+  .complete-set { min-height: 54px; margin: 5px 0 3px; border-radius: 16px; font-size: .9rem; }
+  .runner-footer { min-height: 62px; padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .runner-footer button { min-height: 48px; font-size: .76rem; }
 }
