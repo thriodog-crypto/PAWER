@@ -493,10 +493,10 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
           {exercise.loadType !== 'bodyweight' && <><label><span>{exercise.loadType === 'assisted' ? 'Помощь' : 'Вес'}, {weightUnitLabel(exercise.unit)}</span><input inputMode="decimal" value={set.actualWeightInput} placeholder="—" onChange={e => editActual('actualWeightInput', e.target.value)} /></label><span className="multiply">×</span></>}<label><span>Повторения</span><input inputMode="numeric" value={set.actualRepsInput} placeholder="—" onChange={e => editActual('actualRepsInput', e.target.value)} /></label>
         </div><div className="quick-set-tools"><button onClick={() => fillSet(lastCompletedSet ?? previousSet)}>↺ Прошлый подход</button><button onClick={bumpReps}>＋1 повтор</button>{exercise.loadType !== 'bodyweight' && <button onClick={bumpWeight}>＋{exercise.unit === 'kg' ? '2,5' : '5'} {weightUnitLabel(exercise.unit)}</button>}</div>{!valid && <p className="field-error">Заполни корректные фактические значения.</p>}</section>
         <div className="runner-utility-actions">
-          <button aria-label="Пропустить подход" onClick={skipSet}>— Подход</button>
-          <button aria-label="Пропустить упражнение" onClick={skipExercise}>— Упр.</button>
-          <button aria-label="Поменять упражнение" onClick={() => setShowReplace(true)}>⇄ Сменить</button>
-          <button aria-label="Добавить упражнение" onClick={() => setShowAdd(true)}>＋ Добавить</button>
+          <button aria-label="Пропустить подход" onClick={skipSet}><span>Пропустить</span><strong>подход</strong></button>
+          <button aria-label="Пропустить упражнение" onClick={skipExercise}><span>Пропустить</span><strong>упражнение</strong></button>
+          <button aria-label="Поменять упражнение" onClick={() => setShowReplace(true)}><span>Сменить</span><strong>упражнение</strong></button>
+          <button aria-label="Добавить упражнение" onClick={() => setShowAdd(true)}><span>Добавить</span><strong>упражнение</strong></button>
         </div>
         <button className="complete-set" disabled={!valid || set.status === 'completed'} onClick={confirmSet}>{set.status === 'completed' ? '✓ Подход выполнен' : '✓ Выполнил подход'}</button>
       </div>}

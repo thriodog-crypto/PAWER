@@ -182,7 +182,9 @@ h3 { font-size: 1.05rem; }
 .runner-secondary-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 2px; }
 .runner-secondary-actions button { min-width: 0; min-height: 46px; padding: 0 8px; border-radius: 14px; font-size: .8rem; }
 .runner-utility-actions { margin-top: 6px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.runner-utility-actions button { min-width: 0; min-height: 46px; padding: 3px 4px; border: 1px solid rgb(var(--accent-rgb) / .28); border-radius: 13px; color: var(--green); background: rgb(var(--accent-rgb) / .08); font-size: .67rem; font-weight: 800; line-height: 1.15; }
+.runner-utility-actions button { min-width: 0; min-height: 46px; padding: 3px 2px; border: 1px solid rgb(var(--accent-rgb) / .28); border-radius: 13px; color: var(--green); background: rgb(var(--accent-rgb) / .08); display: grid; place-content: center; gap: 1px; font-size: .62rem; line-height: 1.05; }
+.runner-utility-actions button span { font-size: .56rem; font-weight: 650; }
+.runner-utility-actions button strong { font-size: .61rem; font-weight: 850; }
 .runner-footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; min-height: 70px; padding: 8px max(14px, calc((100% - 720px)/2)) calc(8px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.96); border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .runner-footer button { min-height: 52px; padding: 0 14px; border: 0; border-radius: 14px; background: var(--mint-soft); color: var(--green-dark); font-weight: 800; }
 .runner-empty { width: min(100% - 28px, 560px); margin: 18vh auto 0; padding: 24px; text-align: center; background: #fff; border: 1px solid var(--line); border-radius: 24px; }
