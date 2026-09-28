@@ -409,6 +409,10 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
   const restAfterMinutes = Math.max(0, Math.round(exercise.restAfterSec / 60))
   const exerciseDefinition = data.definitions.find(item => item.id === exercise.exerciseDefinitionId)
   const exerciseBackground = exerciseDefinition?.imageDataUrl
+  const exerciseImageFit = exerciseDefinition?.imageFit ?? 'contain'
+  const exerciseImageScale = exerciseDefinition?.imageFit ? exerciseDefinition.imageScalePercent ?? 100 : 100
+  const exerciseImageX = exerciseDefinition?.imageFit ? exerciseDefinition.imageOffsetXPercent ?? 0 : 0
+  const exerciseImageY = exerciseDefinition?.imageFit ? exerciseDefinition.imageOffsetYPercent ?? 0 : 0
 
   const editActual = (key: 'actualWeightInput' | 'actualRepsInput', value: string, position = { exercise: workout.currentExerciseIndex, set: workout.currentSetIndex }) => update(draft => {
     const w = draft.workouts.find(x => x.id === workout.id); const ex = w?.exercises[position.exercise]; const target = ex?.sets[position.set]; if (!target || !ex) return
@@ -467,7 +471,7 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
   })
 
   return <div className={`workout-shell ${exerciseBackground ? 'has-exercise-background' : ''}`}>
-    {exerciseBackground && <div className="exercise-workout-background" aria-hidden="true"><img src={exerciseBackground} alt="" style={{ transform: `translate3d(${exerciseDefinition?.imageOffsetXPercent ?? 0}%, ${exerciseDefinition?.imageOffsetYPercent ?? 0}%, 0) scale(${(exerciseDefinition?.imageScalePercent ?? 100) / 100})` }} /><span style={{ backgroundColor: `rgb(2 8 7 / ${(data.settings.exerciseBackgroundDimPercent ?? 58) / 100})` }} /></div>}
+    {exerciseBackground && <div className="exercise-workout-background" aria-hidden="true"><img src={exerciseBackground} alt="" style={{ objectFit: exerciseImageFit, objectPosition: `${50 + exerciseImageX}% ${50 + exerciseImageY}%`, transformOrigin: `${50 + exerciseImageX}% ${50 + exerciseImageY}%`, transform: `scale(${exerciseImageScale / 100})` }} /><span style={{ backgroundColor: `rgb(2 8 7 / ${(data.settings.exerciseBackgroundDimPercent ?? 58) / 100})` }} /></div>}
     <header className="runner-header"><button className="back-button" aria-label="На главную" onClick={onClose}>‹</button><div><small>{workout.programName}</small><strong>Тренировка</strong></div><SavePill status={saveStatus} /></header>
     <div className="workout-progress"><span style={{ width: `${workoutProgress(workout)}%` }} /></div>
     <main className="runner-content">
@@ -821,6 +825,10 @@ function ExerciseCatalog({ data, update }: { data: AppState; update: (fn: (draft
 function ExerciseImageEditor({ definition, onEdit }: { definition: ExerciseDefinition; onEdit: (fn: (definition: ExerciseDefinition) => void) => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  const imageFit = definition.imageFit ?? 'contain'
+  const imageScale = definition.imageFit ? definition.imageScalePercent ?? 100 : 100
+  const imageX = definition.imageFit ? definition.imageOffsetXPercent ?? 0 : 0
+  const imageY = definition.imageFit ? definition.imageOffsetYPercent ?? 0 : 0
   const upload = async (file?: File) => {
     if (!file) return
     setBusy(true)
@@ -828,15 +836,15 @@ function ExerciseImageEditor({ definition, onEdit }: { definition: ExerciseDefin
       if (!file.type.startsWith('image/')) throw new Error('Выбери файл изображения.')
       if (file.size > 12 * 1024 * 1024) throw new Error('Файл слишком большой. Максимум 12 МБ.')
       const dataUrl = await resizeBackgroundImage(file)
-      onEdit(target => { target.imageDataUrl = dataUrl; target.imageName = file.name; target.imageScalePercent = 100; target.imageOffsetXPercent = 0; target.imageOffsetYPercent = 0 })
+      onEdit(target => { target.imageDataUrl = dataUrl; target.imageName = file.name; target.imageScalePercent = 100; target.imageOffsetXPercent = 0; target.imageOffsetYPercent = 0; target.imageFit = 'contain' })
     } catch (error) { alert(error instanceof Error ? error.message : 'Не удалось загрузить изображение') }
     finally { setBusy(false); if (inputRef.current) inputRef.current.value = '' }
   }
   return <details className="exercise-image-editor" open={!!definition.imageDataUrl}><summary><span><strong>Фон упражнения</strong><small>{definition.imageName || 'Не выбран'}</small></span><b>{definition.imageDataUrl ? 'Настроить' : 'Добавить'}</b></summary>
-    {definition.imageDataUrl && <div className="exercise-image-preview"><img src={definition.imageDataUrl} alt={`Фон упражнения ${definition.name}`} style={{ transform: `translate3d(${definition.imageOffsetXPercent ?? 0}%, ${definition.imageOffsetYPercent ?? 0}%, 0) scale(${(definition.imageScalePercent ?? 100) / 100})` }} /></div>}
-    <div className="exercise-image-actions"><button className="secondary" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? 'Обрабатываем…' : definition.imageDataUrl ? 'Заменить картинку' : 'Загрузить картинку'}</button>{definition.imageDataUrl && <button className="danger-outline" onClick={() => onEdit(target => { delete target.imageDataUrl; delete target.imageName; delete target.imageScalePercent; delete target.imageOffsetXPercent; delete target.imageOffsetYPercent })}>Убрать фон</button>}</div>
+    {definition.imageDataUrl && <><p className="exercise-image-help">Рамка соответствует экрану подходов. Выбери режим, затем настрой точку фокуса и масштаб.</p><div className="image-fit-toggle"><button className={imageFit === 'contain' ? 'active' : ''} onClick={() => onEdit(target => { target.imageFit = 'contain'; target.imageScalePercent = 100; target.imageOffsetXPercent = 0; target.imageOffsetYPercent = 0 })}>Вместить целиком</button><button className={imageFit === 'cover' ? 'active' : ''} onClick={() => onEdit(target => { target.imageFit = 'cover'; target.imageScalePercent = 100; target.imageOffsetXPercent = 0; target.imageOffsetYPercent = 0 })}>Заполнить экран</button></div><div className="exercise-image-preview"><img src={definition.imageDataUrl} alt={`Фон упражнения ${definition.name}`} style={{ objectFit: imageFit, objectPosition: `${50 + imageX}% ${50 + imageY}%`, transformOrigin: `${50 + imageX}% ${50 + imageY}%`, transform: `scale(${imageScale / 100})` }} /></div></>}
+    <div className="exercise-image-actions"><button className="secondary" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? 'Обрабатываем…' : definition.imageDataUrl ? 'Заменить картинку' : 'Загрузить картинку'}</button>{definition.imageDataUrl && <button className="danger-outline" onClick={() => onEdit(target => { delete target.imageDataUrl; delete target.imageName; delete target.imageScalePercent; delete target.imageOffsetXPercent; delete target.imageOffsetYPercent; delete target.imageFit })}>Убрать фон</button>}</div>
     <input ref={inputRef} hidden type="file" accept="image/*" onChange={event => void upload(event.target.files?.[0])} />
-    {definition.imageDataUrl && <div className="exercise-image-controls"><label><span>Масштаб <output>{definition.imageScalePercent ?? 100}%</output></span><input type="range" min="100" max="240" step="5" value={definition.imageScalePercent ?? 100} onChange={event => onEdit(target => { target.imageScalePercent = Number(event.target.value) })} /></label><label><span>Влево / вправо <output>{definition.imageOffsetXPercent ?? 0}%</output></span><input type="range" min="-50" max="50" step="2" value={definition.imageOffsetXPercent ?? 0} onChange={event => onEdit(target => { target.imageOffsetXPercent = Number(event.target.value) })} /></label><label><span>Вверх / вниз <output>{definition.imageOffsetYPercent ?? 0}%</output></span><input type="range" min="-50" max="50" step="2" value={definition.imageOffsetYPercent ?? 0} onChange={event => onEdit(target => { target.imageOffsetYPercent = Number(event.target.value) })} /></label></div>}
+    {definition.imageDataUrl && <div className="exercise-image-controls"><label><span>Масштаб <output>{imageScale}%</output></span><input type="range" min="100" max="240" step="5" value={imageScale} onChange={event => onEdit(target => { target.imageFit ??= 'contain'; target.imageScalePercent = Number(event.target.value) })} /></label><label><span>Точка фокуса: влево / вправо <output>{imageX}%</output></span><input type="range" min="-50" max="50" step="2" value={imageX} onChange={event => onEdit(target => { target.imageFit ??= 'contain'; target.imageOffsetXPercent = Number(event.target.value) })} /></label><label><span>Точка фокуса: вверх / вниз <output>{imageY}%</output></span><input type="range" min="-50" max="50" step="2" value={imageY} onChange={event => onEdit(target => { target.imageFit ??= 'contain'; target.imageOffsetYPercent = Number(event.target.value) })} /></label></div>}
   </details>
 }
 

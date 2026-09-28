@@ -700,8 +700,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 .exercise-image-editor summary > span { display: grid; gap: 2px; }
 .exercise-image-editor summary small { color: var(--muted); font-size: .65rem; }
 .exercise-image-editor summary b { color: var(--green); font-size: .72rem; }
-.exercise-image-preview { position: relative; height: min(55vw, 280px); margin: 8px 0 10px; overflow: hidden; border: 1px solid rgb(var(--accent-rgb) / .3); border-radius: 16px; background: #020807; }
-.exercise-image-preview img { width: 100%; height: 100%; object-fit: cover; transform-origin: center; }
+.exercise-image-help { margin: 8px 0; color: var(--muted); font-size: .68rem; line-height: 1.45; }
+.image-fit-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 9px; }
+.image-fit-toggle button { min-height: 42px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: rgb(var(--panel-light-rgb) / .74); font-size: .69rem; font-weight: 800; }
+.image-fit-toggle button.active { color: var(--accent-contrast); border-color: var(--green); background: var(--green); }
+.exercise-image-preview { position: relative; width: min(100%, 320px); aspect-ratio: 9 / 16; max-height: 58vh; margin: 8px auto 12px; overflow: hidden; border: 1px solid rgb(var(--accent-rgb) / .3); border-radius: 20px; background: #020807; }
+.exercise-image-preview img { width: 100%; height: 100%; transform-origin: center; }
 .exercise-image-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .exercise-image-actions button { min-height: 44px; padding: 0 8px; border-radius: 12px; }
 .exercise-image-actions button:only-child { grid-column: 1 / 3; }
@@ -713,7 +717,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 
 .workout-shell.has-exercise-background { position: relative; isolation: isolate; }
 .exercise-workout-background { position: fixed; z-index: 0; inset: 0; overflow: hidden; pointer-events: none; background: #020807; }
-.exercise-workout-background img { width: 100%; height: 100%; object-fit: cover; transform-origin: center; }
+.exercise-workout-background img { width: 100%; height: 100%; transform-origin: center; }
 .exercise-workout-background span { position: absolute; inset: 0; }
 .workout-shell.has-exercise-background > .runner-content { position: relative; z-index: 1; }
 

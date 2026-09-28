@@ -122,10 +122,10 @@ describe('exercise catalog cleanup', () => {
     const program = baseProgram()
     program.exercises[0].exerciseDefinitionId = 'duplicate'
     const workout = startWorkout(program)
-    const state: AppState = { version: 1, definitions: [{ id: 'keep', name: 'Горизонтальная тяга', createdAt: '2025-01-01' }, { id: 'duplicate', name: '  горизонтальная   тяга ', category: 'back', favorite: true, imageDataUrl: 'data:image/jpeg;base64,test', imageScalePercent: 145, createdAt: '2025-01-02' }], programs: [program], workouts: [workout], bodyWeights: [], measurements: [], imports: [], settings: { sound: false, vibration: false, keepAwake: false } }
+    const state: AppState = { version: 1, definitions: [{ id: 'keep', name: 'Горизонтальная тяга', createdAt: '2025-01-01' }, { id: 'duplicate', name: '  горизонтальная   тяга ', category: 'back', favorite: true, imageDataUrl: 'data:image/jpeg;base64,test', imageScalePercent: 145, imageFit: 'contain', createdAt: '2025-01-02' }], programs: [program], workouts: [workout], bodyWeights: [], measurements: [], imports: [], settings: { sound: false, vibration: false, keepAwake: false } }
     expect(removeExerciseDefinition(state, 'duplicate')).toBe('merged')
     expect(state.definitions).toHaveLength(1)
-    expect(state.definitions[0]).toMatchObject({ id: 'keep', category: 'back', favorite: true, imageDataUrl: 'data:image/jpeg;base64,test', imageScalePercent: 145 })
+    expect(state.definitions[0]).toMatchObject({ id: 'keep', category: 'back', favorite: true, imageDataUrl: 'data:image/jpeg;base64,test', imageScalePercent: 145, imageFit: 'contain' })
     expect(state.programs[0].exercises[0].exerciseDefinitionId).toBe('keep')
     expect(state.workouts[0].exercises[0].exerciseDefinitionId).toBe('keep')
     expect(state.workouts[0].programSnapshot?.exercises[0].exerciseDefinitionId).toBe('keep')

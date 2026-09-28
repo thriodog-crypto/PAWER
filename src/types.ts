@@ -16,6 +16,7 @@ export interface ExerciseDefinition {
   imageScalePercent?: number
   imageOffsetXPercent?: number
   imageOffsetYPercent?: number
+  imageFit?: 'contain' | 'cover'
   createdAt: string
 }
 

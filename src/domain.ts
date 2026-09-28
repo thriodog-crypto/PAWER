@@ -224,6 +224,7 @@ export function removeExerciseDefinition(state: AppState, definitionId: string):
     duplicate.imageScalePercent ??= definition.imageScalePercent
     duplicate.imageOffsetXPercent ??= definition.imageOffsetXPercent
     duplicate.imageOffsetYPercent ??= definition.imageOffsetYPercent
+    duplicate.imageFit ??= definition.imageFit
     if ((definition.lastUsedAt ?? '') > (duplicate.lastUsedAt ?? '')) duplicate.lastUsedAt = definition.lastUsedAt
     references.forEach(exercise => { exercise.exerciseDefinitionId = duplicate.id })
     state.definitions = state.definitions.filter(item => item.id !== definitionId)
