@@ -38,6 +38,11 @@ describe('set comparison', () => {
   it('reports more weight at same reps', () => expect(compareSets(actual(65, 8), previous).kind).toBe('better'))
   it('does not give a single verdict when weight rises and reps fall', () => expect(compareSets(actual(65, 6), previous).kind).toBe('mixed'))
   it('keeps skipped sets distinct', () => expect(compareSets(actual(60, 0, 'skipped'), previous).kind).toBe('skipped'))
+  it('compares bodyweight sets by repetitions without a fake weight', () => {
+    const before = { ...actual(0, 8), actualWeightInput: '', actualWeightKg: null }
+    const after = { ...actual(0, 10), actualWeightInput: '', actualWeightKg: null }
+    expect(compareSets(after, before, 'kg', 'bodyweight')).toMatchObject({ kind: 'better', repsDelta: 2 })
+  })
 })
 
 describe('timer transitions', () => {
@@ -50,6 +55,15 @@ describe('timer transitions', () => {
 })
 
 describe('history independence', () => {
+  it('does not carry a legacy zero weight into a bodyweight workout', () => {
+    const program = baseProgram()
+    program.exercises[0].loadType = 'bodyweight'
+    program.exercises[0].sets[0].weightInput = '0'
+    program.exercises[0].sets[0].weightKg = 0
+    const workout = startWorkout(program)
+    expect(workout.exercises[0].sets[0]).toMatchObject({ weightInput: '', weightKg: null, actualWeightInput: '', actualWeightKg: null })
+  })
+
   it('snapshots a program and does not mutate it during a workout', () => {
     const program = baseProgram(); const workout = startWorkout(program)
     workout.exercises[0].sets[2].actualRepsInput = '7'

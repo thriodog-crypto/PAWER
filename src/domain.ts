@@ -1,4 +1,4 @@
-import type { ActualSet, AppState, PlannedSet, Program, ProgramExercise, WeightUnit, Workout } from './types'
+import type { ActualSet, AppState, LoadType, PlannedSet, Program, ProgramExercise, WeightUnit, Workout } from './types'
 
 export const LB_TO_KG = 0.45359237
 
@@ -88,9 +88,11 @@ export function startWorkout(program: Program | null, name = 'Свободная
       ...ex,
       sets: ex.sets.map(set => ({
         ...set,
+        weightInput: ex.loadType === 'bodyweight' ? '' : set.weightInput,
+        weightKg: ex.loadType === 'bodyweight' ? null : set.weightKg,
         templateSetId: set.id,
-        actualWeightInput: set.weightInput,
-        actualWeightKg: set.weightKg,
+        actualWeightInput: ex.loadType === 'bodyweight' ? '' : set.weightInput,
+        actualWeightKg: ex.loadType === 'bodyweight' ? null : set.weightKg,
         actualRepsInput: set.repsInput,
         status: 'pending' as const,
       })),
@@ -110,13 +112,19 @@ export interface Comparison {
   repsDelta?: number
 }
 
-export function compareSets(current: ActualSet, previous?: ActualSet, unit: WeightUnit = 'kg'): Comparison {
+export function compareSets(current: ActualSet, previous?: ActualSet, unit: WeightUnit = 'kg', loadType: LoadType = 'external'): Comparison {
   if (current.status === 'skipped') return { kind: 'skipped', text: 'Пропущен' }
   if (!previous || previous.status !== 'completed') return { kind: 'first', text: 'Первая запись' }
-  const currentWeight = current.actualWeightKg
-  const previousWeight = previous.actualWeightKg
   const currentReps = parseReps(current.actualRepsInput)
   const previousReps = parseReps(previous.actualRepsInput)
+  if (loadType === 'bodyweight') {
+    if (currentReps === null || previousReps === null) return { kind: 'first', text: 'Нет сопоставимых данных' }
+    const repsDelta = currentReps - previousReps
+    if (repsDelta === 0) return { kind: 'same', text: 'Без изменений', repsDelta: 0 }
+    return { kind: repsDelta > 0 ? 'better' : 'worse', text: `${repsDelta > 0 ? '+' : '−'}${Math.abs(repsDelta)} ${plural(repsDelta, 'повторение', 'повторения', 'повторений')} относительно прошлого раза`, repsDelta }
+  }
+  const currentWeight = current.actualWeightKg
+  const previousWeight = previous.actualWeightKg
   if (currentWeight === null || previousWeight === null || currentReps === null || previousReps === null) {
     return { kind: 'first', text: 'Нет сопоставимых данных' }
   }

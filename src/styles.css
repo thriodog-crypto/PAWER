@@ -120,10 +120,12 @@ h3 { font-size: 1.05rem; }
 .exercise-name:focus { box-shadow: none; border-color: var(--green); }
 .more-button, .set-row button { width: 44px; height: 44px; border: 0; border-radius: 12px; background: #f7ecec; color: var(--danger); font-size: 1.2rem; }
 .exercise-options { display: grid; grid-template-columns: 1.6fr .8fr; gap: 10px; margin-bottom: 14px; }
+.exercise-options.bodyweight-options { grid-template-columns: 1.4fr 1fr; }
 .exercise-options label, .rest-grid label, .note-field, .select-field, .quick-add label { display: grid; gap: 6px; color: var(--muted); font-size: .74rem; font-weight: 750; }
 .exercise-options select, .rest-grid input, .note-field input, .select-field select, .quick-add input, .quick-add select { min-height: 48px; width: 100%; padding: 0 11px; }
 .sets-table { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; }
 .sets-head, .set-row { display: grid; grid-template-columns: 54px minmax(0, 1fr) minmax(0, 1fr) 44px; align-items: center; gap: 6px; padding: 6px; }
+.bodyweight-sets .sets-head, .bodyweight-sets .set-row { grid-template-columns: 54px minmax(0, 1fr) 44px; }
 .sets-head { min-height: 38px; color: var(--muted); background: #f3f8f5; font-size: .68rem; }
 .sets-head span { text-align: center; }
 .set-row { border-top: 1px solid var(--line); }
@@ -131,6 +133,7 @@ h3 { font-size: 1.05rem; }
 .set-row input { width: 100%; min-height: 48px; padding: 0 8px; text-align: center; font-weight: 800; font-size: 1rem; }
 .set-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 16px; }
 .set-actions button, .reorder-row button { min-height: 44px; border: 0; border-radius: 12px; padding: 0 12px; background: var(--mint-soft); color: var(--green-dark); font-size: .75rem; font-weight: 750; }
+.bodyweight-hint { margin: -4px 0 10px; padding: 10px 12px; border-radius: 12px; color: var(--green); background: rgb(var(--accent-rgb) / .08); border: 1px solid rgb(var(--accent-rgb) / .2); font-size: .75rem; line-height: 1.4; }
 .rest-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .note-field { margin-top: 12px; }
 .reorder-row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
@@ -161,8 +164,14 @@ h3 { font-size: 1.05rem; }
 .previous-line { min-height: 24px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #bee3ce; color: var(--muted); font-size: .82rem; }
 .previous-line small { display: block; margin-top: 3px; }
 .actual-panel { padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: #fff; }
-.actual-panel h2 { margin-bottom: 14px; }
+.actual-panel h2 { margin: 0; }
+.actual-panel-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.actual-panel-heading label { display: grid; gap: 5px; color: var(--muted); font-size: .68rem; font-weight: 750; }
+.actual-panel-heading select { min-height: 44px; max-width: 190px; padding: 0 9px; font-size: .76rem; }
 .actual-inputs { display: grid; grid-template-columns: 1fr 22px 1fr; align-items: end; gap: 6px; }
+.actual-inputs.bodyweight-inputs { grid-template-columns: minmax(0, 1fr); }
+.actual-inputs.bodyweight-inputs label { width: min(100%, 320px); margin-inline: auto; }
+.runner-bodyweight-hint { margin-top: 0; }
 .actual-inputs label { display: grid; gap: 7px; color: var(--muted); font-size: .76rem; font-weight: 750; }
 .actual-inputs input { width: 100%; min-height: 68px; padding: 0 10px; text-align: center; font-size: 1.65rem; font-weight: 900; }
 .multiply { align-self: end; height: 68px; display: grid; place-items: center; font-size: 1.4rem; color: var(--muted); }
@@ -376,6 +385,7 @@ h3 { font-size: 1.05rem; }
   .exercise-card { padding: 13px 10px; }
   .exercise-options, .rest-grid { grid-template-columns: 1fr 1fr; }
   .sets-head, .set-row { grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) 42px; gap: 3px; padding: 5px 3px; }
+  .bodyweight-sets .sets-head, .bodyweight-sets .set-row { grid-template-columns: 44px minmax(0, 1fr) 42px; }
   .sets-head { font-size: .61rem; }
   .set-row input { padding: 0 3px; }
   .runner-title h1 { font-size: 1.8rem; }
@@ -394,6 +404,9 @@ h3 { font-size: 1.05rem; }
   .exercise-options { grid-template-columns: 1fr; }
   .sets-head { grid-template-columns: 39px minmax(0, 1fr) minmax(0, 1fr) 40px; }
   .set-row { grid-template-columns: 39px minmax(0, 1fr) minmax(0, 1fr) 40px; }
+  .bodyweight-sets .sets-head, .bodyweight-sets .set-row { grid-template-columns: 39px minmax(0, 1fr) 40px; }
+  .actual-panel-heading { align-items: stretch; flex-direction: column; }
+  .actual-panel-heading select { max-width: none; width: 100%; }
   .actual-inputs input { font-size: 1.35rem; }
   .summary-hero { padding-right: 38%; }
 }
