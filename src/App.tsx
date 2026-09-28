@@ -8,6 +8,13 @@ import { achievementCatalog, categoryTrainingActivity, compareSets, continueFree
 type Tab = 'home' | 'workouts' | 'progress' | 'profile'
 type ProgressTab = 'strength' | 'body' | 'measurements'
 
+const CATEGORY_IMAGES: Record<string, string> = { arms: 'category-arms.jpg', core: 'category-core.jpg', back: 'category-back.jpg', shoulders: 'category-shoulders.jpg', chest: 'category-chest.jpg', legs: 'category-legs.jpg' }
+function withCategoryImage(definition?: ExerciseDefinition): ExerciseDefinition | undefined {
+  if (!definition || definition.imageDataUrl) return definition
+  const image = CATEGORY_IMAGES[definition.category ?? '']
+  return image ? { ...definition, imageDataUrl: `${import.meta.env.BASE_URL}${image}`, imageName: 'Стандартная картинка категории', imageFit: definition.imageFit ?? 'cover' } : definition
+}
+
 const fmtDate = (value: string) => new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
 const fmtTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`
 const weightUnitLabel = (unit: WeightUnit) => unit === 'kg' ? 'кг' : 'lb'
@@ -418,7 +425,7 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
   const allSetsResolved = workout.exercises.every(item => item.sets.every(itemSet => itemSet.status !== 'pending'))
   const freeExerciseComplete = workout.programId === null && allSetsResolved && workout.currentExerciseIndex === workout.exercises.length - 1
   const restAfterMinutes = Math.max(0, Math.round(exercise.restAfterSec / 60))
-  const exerciseDefinition = data.definitions.find(item => item.id === exercise.exerciseDefinitionId)
+  const exerciseDefinition = withCategoryImage(data.definitions.find(item => item.id === exercise.exerciseDefinitionId))
   const exerciseBackground = exerciseDefinition?.imageDataUrl
   const exerciseImageFit = exerciseDefinition?.imageFit ?? 'contain'
   const exerciseImageScale = exerciseDefinition?.imageFit ? exerciseDefinition.imageScalePercent ?? 100 : 100
@@ -829,7 +836,7 @@ function ExerciseCatalog({ data, update }: { data: AppState; update: (fn: (draft
   const selected = selectedId ? data.definitions.find(definition => definition.id === selectedId && !definition.archived) : undefined
   return <><section className="settings-card exercise-catalog"><h2>Карточки упражнений</h2><p>Нажми на упражнение, чтобы открыть его настройки. Избранные упражнения будут выше в поиске.</p>
     {items.length ? <div className="catalog-list">{items.map(definition => <article className="catalog-list-row" key={definition.id}>
-      <button className="catalog-open" onClick={() => setSelectedId(definition.id)}><span className="catalog-thumb">{definition.imageDataUrl ? <img src={definition.imageDataUrl} alt="" /> : '◫'}</span><span><strong>{definition.name}</strong><small>{knownZone(definition.category) ? EXERCISE_ZONES.find(zone => zone.value === definition.category)?.label : 'Без зоны'}{definition.imageDataUrl ? ' · свой фон' : ''}</small></span><b>›</b></button>
+      <button className="catalog-open" onClick={() => setSelectedId(definition.id)}><span className="catalog-thumb">{withCategoryImage(definition)?.imageDataUrl ? <img src={withCategoryImage(definition)?.imageDataUrl} alt="" /> : '◫'}</span><span><strong>{definition.name}</strong><small>{knownZone(definition.category) ? EXERCISE_ZONES.find(zone => zone.value === definition.category)?.label : 'Без зоны'}{definition.imageDataUrl ? ' · свой фон' : ''}</small></span><b>›</b></button>
       <button className={definition.favorite ? 'favorite active' : 'favorite'} aria-label={definition.favorite ? `Убрать ${definition.name} из избранного` : `Добавить ${definition.name} в избранное`} onClick={() => edit(definition.id, target => { target.favorite = !target.favorite })}>{definition.favorite ? '★' : '☆'}</button>
     </article>)}</div> : <p className="catalog-empty">Упражнения появятся здесь после добавления в программу.</p>}
   </section>
@@ -840,7 +847,8 @@ function ExerciseCatalog({ data, update }: { data: AppState; update: (fn: (draft
   </main></div>}</>
 }
 
-function ExerciseImageEditor({ definition, dimPercent, onEdit }: { definition: ExerciseDefinition; dimPercent: number; onEdit: (fn: (definition: ExerciseDefinition) => void) => void }) {
+function ExerciseImageEditor({ definition: originalDefinition, dimPercent, onEdit }: { definition: ExerciseDefinition; dimPercent: number; onEdit: (fn: (definition: ExerciseDefinition) => void) => void }) {
+  const definition = withCategoryImage(originalDefinition)!
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const imageFit = definition.imageFit ?? 'contain'
@@ -860,9 +868,9 @@ function ExerciseImageEditor({ definition, dimPercent, onEdit }: { definition: E
   }
   return <div className="exercise-image-editor"><div className="exercise-image-heading"><span><strong>Фон упражнения</strong><small>{definition.imageName || 'Не выбран'}</small></span>{definition.imageDataUrl && <b>Предпросмотр экрана</b>}</div>
     {definition.imageDataUrl && <><p className="exercise-image-help">Это точная форма горизонтальной карточки «Подход 1 из 3». Всё, что видно здесь, попадёт в неё во время тренировки.</p><div className="image-fit-toggle"><button className={imageFit === 'contain' ? 'active' : ''} onClick={() => onEdit(target => { target.imageFit = 'contain'; target.imageScalePercent = 100; target.imageOffsetXPercent = 0; target.imageOffsetYPercent = 0 })}>Вместить целиком</button><button className={imageFit === 'cover' ? 'active' : ''} onClick={() => onEdit(target => { target.imageFit = 'cover'; target.imageScalePercent = 100; target.imageOffsetXPercent = 0; target.imageOffsetYPercent = 0 })}>Заполнить карточку</button></div><div className="exercise-image-preview set-focus has-image"><div className="set-focus-background" aria-hidden="true"><img src={definition.imageDataUrl} alt="" style={{ objectFit: imageFit, objectPosition: `${50 + imageX}% ${50 + imageY}%`, transformOrigin: `${50 + imageX}% ${50 + imageY}%`, transform: `scale(${imageScale / 100})` }} /><span style={{ backgroundColor: `rgb(2 8 7 / ${dimPercent / 100})` }} /></div><div className="set-counter"><span>Подход</span><strong>1</strong><span>из 3</span></div><div className="plan-line">План: <strong>40 кг × 10</strong></div><div className="previous-line">Первая запись</div></div></>}
-    <div className="exercise-image-actions"><button className="secondary" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? 'Обрабатываем…' : definition.imageDataUrl ? 'Заменить картинку' : 'Загрузить картинку'}</button>{definition.imageDataUrl && <button className="danger-outline" onClick={() => onEdit(target => { delete target.imageDataUrl; delete target.imageName; delete target.imageScalePercent; delete target.imageOffsetXPercent; delete target.imageOffsetYPercent; delete target.imageFit })}>Убрать фон</button>}</div>
+    <div className="exercise-image-actions"><button className="secondary" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? 'Обрабатываем…' : definition.imageDataUrl ? 'Заменить картинку' : 'Загрузить картинку'}</button>{originalDefinition.imageDataUrl && <button className="danger-outline" onClick={() => onEdit(target => { delete target.imageDataUrl; delete target.imageName; delete target.imageScalePercent; delete target.imageOffsetXPercent; delete target.imageOffsetYPercent; delete target.imageFit })}>{CATEGORY_IMAGES[definition.category ?? ''] ? 'Вернуть картинку категории' : 'Убрать фон'}</button>}</div>
     <input ref={inputRef} hidden type="file" accept="image/*" onChange={event => void upload(event.target.files?.[0])} />
-    {definition.imageDataUrl && <div className="exercise-image-controls"><label><span>Масштаб <output>{imageScale}%</output></span><input type="range" min="100" max="500" step="5" value={imageScale} onChange={event => onEdit(target => { target.imageFit ??= 'contain'; target.imageScalePercent = Number(event.target.value) })} /></label><label><span>Точка фокуса: влево / вправо <output>{imageX}%</output></span><input type="range" min="-50" max="50" step="2" value={imageX} onChange={event => onEdit(target => { target.imageFit ??= 'contain'; target.imageOffsetXPercent = Number(event.target.value) })} /></label><label><span>Точка фокуса: вверх / вниз <output>{imageY}%</output></span><input type="range" min="-50" max="50" step="2" value={imageY} onChange={event => onEdit(target => { target.imageFit ??= 'contain'; target.imageOffsetYPercent = Number(event.target.value) })} /></label></div>}
+    {definition.imageDataUrl && <div className="exercise-image-controls"><label><span>Масштаб <output>{imageScale}%</output></span><input type="range" min="100" max="500" step="5" value={imageScale} onChange={event => onEdit(target => { target.imageFit ??= imageFit; target.imageScalePercent = Number(event.target.value) })} /></label><label><span>Точка фокуса: влево / вправо <output>{imageX}%</output></span><input type="range" min="-50" max="50" step="2" value={imageX} onChange={event => onEdit(target => { target.imageFit ??= imageFit; target.imageOffsetXPercent = Number(event.target.value) })} /></label><label><span>Точка фокуса: вверх / вниз <output>{imageY}%</output></span><input type="range" min="-50" max="50" step="2" value={imageY} onChange={event => onEdit(target => { target.imageFit ??= imageFit; target.imageOffsetYPercent = Number(event.target.value) })} /></label></div>}
   </div>
 }
 
