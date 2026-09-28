@@ -299,11 +299,12 @@ function ProgramEditor({ data, program, saveStatus, update, onBack, onSave, onSt
 }
 
 function ExerciseEditor({ exercise, zone, index, total, onEdit, onZone, onMove, onDelete }: { exercise: ProgramExercise; zone?: string; index: number; total: number; onEdit: (fn: (e: ProgramExercise) => void) => void; onZone: (zone: string) => void; onMove: (delta: number) => void; onDelete: () => void }) {
+  const automaticName = `Упражнение ${index + 1}`
   const weightLabel = exercise.loadType === 'assisted' ? 'Помощь' : exercise.loadType === 'bodyweight' ? 'Доп. вес' : 'Вес'
   const updateSet = (id: string, key: 'weightInput' | 'repsInput', value: string) => onEdit(ex => { const set = ex.sets.find(s => s.id === id); if (!set) return; if (key === 'repsInput') set.repsInput = value.replace(/\D/g, ''); else { set.weightInput = value; Object.assign(set, normalizeSet(set, ex.unit)) } })
   const changeUnit = (unit: WeightUnit) => onEdit(ex => Object.assign(ex, switchExerciseUnit(ex, unit)))
   return <article className="exercise-card">
-    <div className="exercise-heading"><span className="number-badge">{index + 1}</span><input className="exercise-name" aria-label={`Название упражнения ${index + 1}`} value={exercise.name} onChange={e => onEdit(ex => { ex.name = e.target.value })} /><button className="more-button" aria-label="Удалить упражнение" onClick={() => { if (confirm(`Удалить «${exercise.name}» из программы?`)) onDelete() }}>×</button></div>
+    <div className="exercise-heading"><span className="number-badge">{index + 1}</span><input className="exercise-name" aria-label={`Название упражнения ${index + 1}`} value={exercise.name} placeholder={automaticName} onFocus={() => { if (/^Упражнение \d+$/.test(exercise.name)) onEdit(ex => { ex.name = '' }) }} onChange={e => onEdit(ex => { ex.name = e.target.value })} onBlur={() => { if (!exercise.name.trim()) onEdit(ex => { ex.name = automaticName }) }} /><button className="more-button" aria-label="Удалить упражнение" onClick={() => { if (confirm(`Удалить «${exercise.name}» из программы?`)) onDelete() }}>×</button></div>
     <div className={`exercise-options ${exercise.loadType === 'bodyweight' ? 'bodyweight-options' : ''}`}>
       <label>Тип нагрузки<select value={exercise.loadType} onChange={e => onEdit(ex => applyLoadType(ex, e.target.value as LoadType))}><option value="external">С отягощением</option><option value="bodyweight">Собственный вес</option><option value="assisted">С противовесом</option></select></label>
       {exercise.loadType !== 'bodyweight' && <label>Единица<select value={exercise.unit} onChange={e => changeUnit(e.target.value as WeightUnit)}><option value="kg">кг</option><option value="lb">lb</option></select></label>}
