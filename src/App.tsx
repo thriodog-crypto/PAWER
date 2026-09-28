@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AchievementReward, RewardBadge, prepareRewardAudio, rewardStyle, rewardTheme } from './AchievementReward'
 import type { ActualSet, AppState, BodyWeightEntry, ExerciseDefinition, LoadType, MeasurementEntry, Program, ProgramExercise, SaveStatus, WeightUnit, Workout } from './types'
 import { backupJson, createAutoSnapshotIfNeeded, createLocalSnapshot, emptyState, listLocalSnapshots, loadState, parseBackup, saveState } from './storage'
 import type { LocalSnapshot } from './storage'
@@ -286,10 +287,11 @@ function Home({ data, activeWorkout, onContinue, onStart, onPrograms, onEdit }: 
 }
 
 function AchievementsGallery({ data }: { data: AppState }) {
+  const [selected, setSelected] = useState<string | null>(null)
   const achievements = achievementCatalog(data)
   const unlocked = achievements.filter(item => item.unlocked)
   const next = achievements.filter(item => !item.unlocked).sort((a, b) => b.progress / b.target - a.progress / a.target)[0]
-  return <details className="achievements-gallery"><summary><span className="achievement-summary-icon">🏆</span><span><small>Ачивки</small><strong>{unlocked.length} из {achievements.length} открыто</strong>{next && <em>Ближе всего: {next.title} · {Math.floor(next.progress / next.target * 100)}%</em>}</span><b>Смотреть</b></summary><div className="achievement-grid">{achievements.map(item => <article key={item.id} className={item.unlocked ? 'unlocked' : 'locked'}><span>{item.unlocked ? item.icon : '🔒'}</span><div><strong>{item.title}</strong><small>{item.description}</small><div className="achievement-progress"><i style={{ width: `${Math.min(100, item.progress / item.target * 100)}%` }} /></div><em>{item.unlocked ? 'Получено' : `${Number(item.progress.toFixed(1)).toLocaleString('ru')} / ${item.target.toLocaleString('ru')}`}</em></div></article>)}</div></details>
+  return <><details className="achievements-gallery"><summary><span className="achievement-summary-icon">🏆</span><span><small>Твои трофеи</small><strong>{unlocked.length} из {achievements.length} открыто</strong>{next && <em>Следующая цель: {next.title}</em>}</span><b>Смотреть</b></summary><div className="reward-collection">{achievements.map(item => <button key={item.id} className={`reward-tile ${item.unlocked ? 'earned' : 'pending'}`} style={rewardStyle(item.id)} onClick={() => { prepareRewardAudio(); setSelected(item.id) }}><RewardBadge item={item} /><span className="reward-category">{rewardTheme(item.id).label}</span><strong>{item.title}</strong><small>{item.description}</small><span className="reward-meter"><i style={{ width: `${item.unlocked ? 100 : Math.min(100, item.progress / item.target * 100)}%` }} /></span><em>{item.unlocked ? '✓ Получено · открыть' : `${Number(item.progress.toFixed(1)).toLocaleString('ru')} / ${item.target.toLocaleString('ru')}`}</em></button>)}</div></details>{selected && <AchievementReward items={achievements.filter(item => item.id === selected)} onClose={() => setSelected(null)} />}</>
 }
 
 function Workouts({ data, update, onEdit, onStart, onOpenWorkout }: { data: AppState; update: (fn: (draft: AppState) => void) => void; onEdit: (id: string) => void; onStart: (p: Program | null) => void; onOpenWorkout: (id: string) => void }) {
@@ -629,6 +631,7 @@ function workoutProgress(w: Workout) {
 }
 
 function finishWorkout(update: (fn: (draft: AppState) => void) => void, id: string, onComplete: (id: string) => void) {
+  prepareRewardAudio()
   update(draft => { const w = draft.workouts.find(x => x.id === id); if (w) { const finishedAt = new Date().toISOString(); w.status = 'completed'; w.finishedAt = finishedAt; w.timer = null; w.awaitingNextExercise = false; w.achievementIds = syncAchievements(draft, finishedAt) } })
   onComplete(id)
 }
@@ -939,6 +942,7 @@ async function fingerprintOf(value: string): Promise<string> {
 }
 
 function WorkoutSummary({ data, workout, update, onClose, onDelete, onUpdateProgram }: { data: AppState; workout: Workout; update: (fn: (draft: AppState) => void) => void; onClose: () => void; onDelete: () => void; onUpdateProgram: () => void }) {
+  const [rewardOpen, setRewardOpen] = useState(() => Boolean(workout.achievementIds?.length) && sessionStorage.getItem(`reward-seen:${workout.id}`) !== 'true')
   const [editing, setEditing] = useState(false)
   const [savedAsProgram, setSavedAsProgram] = useState(false)
   const completed = workout.exercises.reduce((n, e) => n + e.sets.filter(s => s.status === 'completed').length, 0)
@@ -954,7 +958,8 @@ function WorkoutSummary({ data, workout, update, onClose, onDelete, onUpdateProg
   const gains = comparisons.filter(x => x.kind === 'better').length
   const declines = comparisons.filter(x => x.kind === 'worse').length
   return <div className="summary-overlay" role="dialog" aria-modal="true"><div className="summary-page"><header className="summary-top"><button onClick={onClose}>×</button><span>{fmtDate(workout.finishedAt ?? workout.startedAt)}</span><button onClick={() => setEditing(x => !x)}>{editing ? 'Готово' : 'Исправить'}</button></header><section className="summary-hero"><div><p className="eyebrow">Тренировка сохранена</p><h1>{workout.programName}</h1><p>{gains ? `${gains} ${gains === 1 ? 'улучшение' : 'улучшения'} — отличный повод продолжать.` : 'Запись готова. Каждый честно отмеченный подход важен.'}</p></div><WolfArt compact src={data.settings.characterImageDataUrl} /></section>
-    {newAchievements.length > 0 && <section className="achievement-celebration"><div className="celebration-burst">✦</div><p className="eyebrow">Новая ачивка</p><h2>{praise}</h2><div>{newAchievements.map(item => <article key={item.id}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.description}</small></div></article>)}</div></section>}
+    {rewardOpen && newAchievements.length > 0 && <AchievementReward items={newAchievements} onClose={() => { sessionStorage.setItem(`reward-seen:${workout.id}`, 'true'); setRewardOpen(false) }} />}
+    {newAchievements.length > 0 && <section className="achievement-celebration"><p className="eyebrow">Новые трофеи</p><h2>{praise}</h2><button className="secondary wide" onClick={() => { prepareRewardAudio(); setRewardOpen(true) }}>✦ Открыть награды · {newAchievements.length}</button></section>}
     <div className="summary-metrics"><div><strong>{durationMin}</strong><span>минут</span></div><div><strong>{completed}</strong><span>подходов</span></div><div><strong>{Math.round(workoutVolumeKg(workout)).toLocaleString('ru')}</strong><span>кг объёма</span></div></div>
     <div className="summary-signals"><span className="positive">↑ {gains} улучшений</span><span className="negative">↓ {declines} снижений</span><span>○ {skipped} пропусков</span></div>
     <section className="summary-exercises"><h2>По упражнениям</h2>{workout.exercises.map(ex => { const previous = previousWorkoutForExercise(data, workout, ex.exerciseDefinitionId); const prevEx = previous?.exercises.find(p => p.exerciseDefinitionId === ex.exerciseDefinitionId); return <details key={ex.id} open><summary><strong>{ex.name}</strong><span>{ex.sets.filter(s => s.status === 'completed').length}/{ex.sets.length}</span></summary><div>{ex.sets.map((s, i) => { const matched = prevEx?.sets.find(p => p.templateSetId === s.templateSetId); const comparison = prevEx && !matched ? { kind: 'additional' as const, text: 'Дополнительный подход' } : compareSets(s, matched, ex.unit, ex.loadType); return <div className="summary-set" key={s.id}><span>{i + 1}</span>{editing ? <>{ex.loadType !== 'bodyweight' && <><input inputMode="decimal" value={s.actualWeightInput} onChange={e => update(d => { const target = d.workouts.find(x => x.id === workout.id)?.exercises.find(x => x.id === ex.id)?.sets.find(x => x.id === s.id); if (target) { target.actualWeightInput = e.target.value; const v = parseDecimal(e.target.value); target.actualWeightKg = v === null ? null : toKg(v, ex.unit) } })} /><span>{weightUnitLabel(ex.unit)} ×</span></>}<input inputMode="numeric" value={s.actualRepsInput} onChange={e => update(d => { const target = d.workouts.find(x => x.id === workout.id)?.exercises.find(x => x.id === ex.id)?.sets.find(x => x.id === s.id); if (target) target.actualRepsInput = e.target.value.replace(/\D/g, '') })} /></> : <strong>{s.status === 'completed' ? setResultLabel(ex, s.actualWeightInput, s.actualRepsInput) : 'Пропущен'}</strong>}<small className={comparison.kind}>{comparison.text}</small></div>})}</div></details>})}</section>
