@@ -223,7 +223,7 @@ h3 { font-size: 1.05rem; }
 .add-list-set { min-height: 44px; width: 100%; margin-top: 6px; border: 1px dashed #acd5bf; border-radius: 12px; color: var(--green); background: #f3fbf6; font-weight: 750; }
 .exercise-picker { display: grid; grid-template-rows: auto auto minmax(100px, 1fr) auto; gap: 12px; }
 .picker-search { display: grid; gap: 7px; color: var(--muted); font-size: .78rem; font-weight: 750; }
-.picker-search input, .picker-create input, .picker-create select { width: 100%; min-height: 48px; padding: 0 12px; }
+.picker-search input, .picker-create input, .picker-create select { width: 100%; min-height: 48px; padding: 0 12px; font-size: 16px; }
 .exercise-groups { min-height: 100px; max-height: min(42vh, 390px); padding-right: 2px; }
 .exercise-group { padding: 12px 0; border-top: 1px solid var(--line); }
 .exercise-group h3 { margin: 0 0 8px; color: var(--green); font-size: .82rem; text-transform: uppercase; letter-spacing: .07em; }
