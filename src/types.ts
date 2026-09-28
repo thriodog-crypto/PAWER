@@ -11,6 +11,11 @@ export interface ExerciseDefinition {
   favorite?: boolean
   lastUsedAt?: string
   archived?: boolean
+  imageDataUrl?: string
+  imageName?: string
+  imageScalePercent?: number
+  imageOffsetXPercent?: number
+  imageOffsetYPercent?: number
   createdAt: string
 }
 
@@ -125,6 +130,7 @@ export interface Settings {
   accentColor?: string
   panelColor?: string
   onboardingDone?: boolean
+  exerciseBackgroundDimPercent?: number
 }
 
 export interface AppState {

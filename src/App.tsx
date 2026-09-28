@@ -407,6 +407,8 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
   const allSetsResolved = workout.exercises.every(item => item.sets.every(itemSet => itemSet.status !== 'pending'))
   const freeExerciseComplete = workout.programId === null && allSetsResolved && workout.currentExerciseIndex === workout.exercises.length - 1
   const restAfterMinutes = Math.max(0, Math.round(exercise.restAfterSec / 60))
+  const exerciseDefinition = data.definitions.find(item => item.id === exercise.exerciseDefinitionId)
+  const exerciseBackground = exerciseDefinition?.imageDataUrl
 
   const editActual = (key: 'actualWeightInput' | 'actualRepsInput', value: string, position = { exercise: workout.currentExerciseIndex, set: workout.currentSetIndex }) => update(draft => {
     const w = draft.workouts.find(x => x.id === workout.id); const ex = w?.exercises[position.exercise]; const target = ex?.sets[position.set]; if (!target || !ex) return
@@ -464,7 +466,8 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
     }
   })
 
-  return <div className="workout-shell">
+  return <div className={`workout-shell ${exerciseBackground ? 'has-exercise-background' : ''}`}>
+    {exerciseBackground && <div className="exercise-workout-background" aria-hidden="true"><img src={exerciseBackground} alt="" style={{ transform: `translate3d(${exerciseDefinition?.imageOffsetXPercent ?? 0}%, ${exerciseDefinition?.imageOffsetYPercent ?? 0}%, 0) scale(${(exerciseDefinition?.imageScalePercent ?? 100) / 100})` }} /><span style={{ backgroundColor: `rgb(2 8 7 / ${(data.settings.exerciseBackgroundDimPercent ?? 58) / 100})` }} /></div>}
     <header className="runner-header"><button className="back-button" aria-label="На главную" onClick={onClose}>‹</button><div><small>{workout.programName}</small><strong>Тренировка</strong></div><SavePill status={saveStatus} /></header>
     <div className="workout-progress"><span style={{ width: `${workoutProgress(workout)}%` }} /></div>
     <main className="runner-content">
@@ -777,6 +780,7 @@ function Profile({ data, replaceData, update }: { data: AppState; replaceData: (
         <label><span>Положение: вверх / вниз <output>{data.settings.characterOffsetYPercent ?? 24}%</output></span><input type="range" min="-60" max="60" step="2" value={data.settings.characterOffsetYPercent ?? 24} onChange={e => update(d => { d.settings.characterOffsetYPercent = Number(e.target.value) })} /></label>
         <button className="secondary wide appearance-reset" onClick={() => update(d => { delete d.settings.characterScalePercent; delete d.settings.characterOffsetXPercent; delete d.settings.characterOffsetYPercent })}>Вернуть положение как в референсе</button>
         <label className={!data.settings.wallpaperImageDataUrl ? 'disabled' : ''}><span>Затемнение обоев <output>{data.settings.wallpaperDimPercent ?? 72}%</output></span><input type="range" min="0" max="95" step="1" disabled={!data.settings.wallpaperImageDataUrl} value={data.settings.wallpaperDimPercent ?? 72} onChange={e => update(d => { d.settings.wallpaperDimPercent = Number(e.target.value) })} /></label>
+        <label><span>Затемнение фона упражнения <output>{data.settings.exerciseBackgroundDimPercent ?? 58}%</output></span><input type="range" min="0" max="95" step="1" value={data.settings.exerciseBackgroundDimPercent ?? 58} onChange={e => update(d => { d.settings.exerciseBackgroundDimPercent = Number(e.target.value) })} /></label>
         <label><span>Прозрачность карточек и меню <output>{data.settings.menuTransparencyPercent ?? 6}%</output></span><input type="range" min="0" max="70" step="1" value={data.settings.menuTransparencyPercent ?? 6} onChange={e => update(d => { d.settings.menuTransparencyPercent = Number(e.target.value) })} /></label>
         <div className="accent-setting"><div><strong>Цвет интерфейса</strong><small>Кнопки, обводки и активные элементы</small></div><div className="accent-swatches">{ACCENT_PRESETS.map(preset => <button key={preset.value} type="button" aria-label={preset.label} aria-pressed={(data.settings.accentColor ?? '#fb7185').toLowerCase() === preset.value} className={(data.settings.accentColor ?? '#fb7185').toLowerCase() === preset.value ? 'active' : ''} style={{ backgroundColor: preset.value }} onClick={() => update(d => { d.settings.accentColor = preset.value })} />)}<label className="custom-color" title="Свой цвет"><span>＋</span><input type="color" aria-label="Выбрать свой цвет интерфейса" value={data.settings.accentColor ?? '#fb7185'} onChange={e => update(d => { d.settings.accentColor = e.target.value })} /></label></div></div>
         <div className="accent-setting"><div><strong>Цвет фона карточек и меню</strong><small>Меняет оттенок окон отдельно от кнопок</small></div><div className="accent-swatches">{PANEL_PRESETS.map(preset => <button key={preset.value} type="button" aria-label={preset.label} aria-pressed={(data.settings.panelColor ?? '#17191f').toLowerCase() === preset.value} className={(data.settings.panelColor ?? '#17191f').toLowerCase() === preset.value ? 'active' : ''} style={{ backgroundColor: preset.value }} onClick={() => update(d => { d.settings.panelColor = preset.value })} />)}<label className="custom-color" title="Свой цвет фона"><span>＋</span><input type="color" aria-label="Выбрать свой цвет фона карточек и меню" value={data.settings.panelColor ?? '#17191f'} onChange={e => update(d => { d.settings.panelColor = e.target.value })} /></label></div></div>
@@ -805,9 +809,46 @@ function ExerciseCatalog({ data, update }: { data: AppState; update: (fn: (draft
     const message = duplicate ? `Объединить дубликат «${definition.name}» с одноимённой карточкой? Программы и история сохранятся.` : used ? `Убрать «${definition.name}» из каталога? Упражнение останется в существующих программах и истории.` : `Удалить «${definition.name}» из каталога?`
     if (confirm(message)) update(draft => { removeExerciseDefinition(draft, definition.id) })
   }
-  return <section className="settings-card exercise-catalog"><h2>Карточки упражнений</h2><p>Избранные будут выше в поиске. Можно сохранить оборудование и короткую подсказку по технике.</p>
-    {items.length ? <div className="catalog-list">{items.map(definition => <article className="catalog-row" key={definition.id}><div className="catalog-row-head"><span><strong>{definition.name}</strong><small>{knownZone(definition.category) ? EXERCISE_ZONES.find(zone => zone.value === definition.category)?.label : 'Без зоны'}</small></span><span className="catalog-card-actions"><button className={definition.favorite ? 'favorite active' : 'favorite'} aria-label={definition.favorite ? `Убрать ${definition.name} из избранного` : `Добавить ${definition.name} в избранное`} onClick={() => edit(definition.id, target => { target.favorite = !target.favorite })}>{definition.favorite ? '★' : '☆'}</button><button className="catalog-delete" aria-label={`Удалить ${definition.name}`} onClick={() => remove(definition)}>×</button></span></div><div className="catalog-fields"><label>Зона<select aria-label={`Зона упражнения ${definition.name}`} value={knownZone(definition.category) ? definition.category : ''} onChange={event => edit(definition.id, target => { target.category = event.target.value || undefined })}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></label><label>Оборудование<input value={definition.equipment ?? ''} placeholder="Турник, тренажёр…" onChange={event => edit(definition.id, target => { target.equipment = event.target.value || undefined })} /></label><label className="catalog-note">Подсказка<textarea value={definition.notes ?? ''} placeholder="Техника или важное напоминание" onChange={event => edit(definition.id, target => { target.notes = event.target.value || undefined })} /></label></div></article>)}</div> : <p className="catalog-empty">Упражнения появятся здесь после добавления в программу.</p>}
+  return <section className="settings-card exercise-catalog"><h2>Карточки упражнений</h2><p>Добавляй оборудование, подсказку и собственный фон. Избранные упражнения будут выше в поиске.</p>
+    {items.length ? <div className="catalog-list">{items.map(definition => <article className="catalog-row" key={definition.id}>
+      <div className="catalog-row-head"><span><strong>{definition.name}</strong><small>{knownZone(definition.category) ? EXERCISE_ZONES.find(zone => zone.value === definition.category)?.label : 'Без зоны'}</small></span><span className="catalog-card-actions"><button className={definition.favorite ? 'favorite active' : 'favorite'} aria-label={definition.favorite ? `Убрать ${definition.name} из избранного` : `Добавить ${definition.name} в избранное`} onClick={() => edit(definition.id, target => { target.favorite = !target.favorite })}>{definition.favorite ? '★' : '☆'}</button><button className="catalog-delete" aria-label={`Удалить ${definition.name}`} onClick={() => remove(definition)}>×</button></span></div>
+      <div className="catalog-fields"><label>Зона<select aria-label={`Зона упражнения ${definition.name}`} value={knownZone(definition.category) ? definition.category : ''} onChange={event => edit(definition.id, target => { target.category = event.target.value || undefined })}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></label><label>Оборудование<input value={definition.equipment ?? ''} placeholder="Турник, тренажёр…" onChange={event => edit(definition.id, target => { target.equipment = event.target.value || undefined })} /></label><label className="catalog-note">Подсказка<textarea value={definition.notes ?? ''} placeholder="Техника или важное напоминание" onChange={event => edit(definition.id, target => { target.notes = event.target.value || undefined })} /></label></div>
+      <ExerciseImageEditor definition={definition} onEdit={fn => edit(definition.id, fn)} />
+    </article>)}</div> : <p className="catalog-empty">Упражнения появятся здесь после добавления в программу.</p>}
   </section>
+}
+
+function ExerciseImageEditor({ definition, onEdit }: { definition: ExerciseDefinition; onEdit: (fn: (definition: ExerciseDefinition) => void) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const upload = async (file?: File) => {
+    if (!file) return
+    setBusy(true)
+    try {
+      if (!file.type.startsWith('image/')) throw new Error('Выбери файл изображения.')
+      if (file.size > 12 * 1024 * 1024) throw new Error('Файл слишком большой. Максимум 12 МБ.')
+      const dataUrl = await resizeBackgroundImage(file)
+      onEdit(target => { target.imageDataUrl = dataUrl; target.imageName = file.name; target.imageScalePercent = 100; target.imageOffsetXPercent = 0; target.imageOffsetYPercent = 0 })
+    } catch (error) { alert(error instanceof Error ? error.message : 'Не удалось загрузить изображение') }
+    finally { setBusy(false); if (inputRef.current) inputRef.current.value = '' }
+  }
+  return <details className="exercise-image-editor" open={!!definition.imageDataUrl}><summary><span><strong>Фон упражнения</strong><small>{definition.imageName || 'Не выбран'}</small></span><b>{definition.imageDataUrl ? 'Настроить' : 'Добавить'}</b></summary>
+    {definition.imageDataUrl && <div className="exercise-image-preview"><img src={definition.imageDataUrl} alt={`Фон упражнения ${definition.name}`} style={{ transform: `translate3d(${definition.imageOffsetXPercent ?? 0}%, ${definition.imageOffsetYPercent ?? 0}%, 0) scale(${(definition.imageScalePercent ?? 100) / 100})` }} /></div>}
+    <div className="exercise-image-actions"><button className="secondary" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? 'Обрабатываем…' : definition.imageDataUrl ? 'Заменить картинку' : 'Загрузить картинку'}</button>{definition.imageDataUrl && <button className="danger-outline" onClick={() => onEdit(target => { delete target.imageDataUrl; delete target.imageName; delete target.imageScalePercent; delete target.imageOffsetXPercent; delete target.imageOffsetYPercent })}>Убрать фон</button>}</div>
+    <input ref={inputRef} hidden type="file" accept="image/*" onChange={event => void upload(event.target.files?.[0])} />
+    {definition.imageDataUrl && <div className="exercise-image-controls"><label><span>Масштаб <output>{definition.imageScalePercent ?? 100}%</output></span><input type="range" min="100" max="240" step="5" value={definition.imageScalePercent ?? 100} onChange={event => onEdit(target => { target.imageScalePercent = Number(event.target.value) })} /></label><label><span>Влево / вправо <output>{definition.imageOffsetXPercent ?? 0}%</output></span><input type="range" min="-50" max="50" step="2" value={definition.imageOffsetXPercent ?? 0} onChange={event => onEdit(target => { target.imageOffsetXPercent = Number(event.target.value) })} /></label><label><span>Вверх / вниз <output>{definition.imageOffsetYPercent ?? 0}%</output></span><input type="range" min="-50" max="50" step="2" value={definition.imageOffsetYPercent ?? 0} onChange={event => onEdit(target => { target.imageOffsetYPercent = Number(event.target.value) })} /></label></div>}
+  </details>
+}
+
+async function resizeBackgroundImage(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file)
+  const maxSide = 1600
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+  const context = canvas.getContext('2d'); if (!context) throw new Error('Браузер не смог обработать изображение.')
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close()
+  return canvas.toDataURL('image/jpeg', .84)
 }
 
 function fileToDataUrl(file: File): Promise<string> {

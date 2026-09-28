@@ -219,6 +219,11 @@ export function removeExerciseDefinition(state: AppState, definitionId: string):
     duplicate.notes ||= definition.notes
     duplicate.equipment ||= definition.equipment
     duplicate.favorite ||= definition.favorite
+    duplicate.imageDataUrl ||= definition.imageDataUrl
+    duplicate.imageName ||= definition.imageName
+    duplicate.imageScalePercent ??= definition.imageScalePercent
+    duplicate.imageOffsetXPercent ??= definition.imageOffsetXPercent
+    duplicate.imageOffsetYPercent ??= definition.imageOffsetYPercent
     if ((definition.lastUsedAt ?? '') > (duplicate.lastUsedAt ?? '')) duplicate.lastUsedAt = definition.lastUsedAt
     references.forEach(exercise => { exercise.exerciseDefinitionId = duplicate.id })
     state.definitions = state.definitions.filter(item => item.id !== definitionId)
