@@ -796,10 +796,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 }
 
 @media (max-width: 520px) and (max-height: 920px) {
-  .workout-shell { height: 100dvh; min-height: 0; overflow: hidden; padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .workout-shell { height: 100dvh; min-height: 0; overflow: hidden; padding-bottom: calc(70px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; }
   .runner-header { min-height: calc(64px + env(safe-area-inset-top)); padding-top: calc(7px + env(safe-area-inset-top)); padding-bottom: 7px; }
   .workout-progress { top: calc(64px + env(safe-area-inset-top)); }
-  .runner-content { padding: 7px 0 3px; }
+  .runner-content { flex: 1; min-height: 0; padding: 7px 0 3px; overflow: hidden; }
+  .active-set-layout { height: 100%; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; }
   .runner-title { align-items: center; gap: 8px; }
   .runner-title .eyebrow { margin-bottom: 3px; font-size: .63rem; }
   .runner-title h1 { margin: 0; font-size: 1.48rem; }
