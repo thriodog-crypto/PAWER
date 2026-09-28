@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActualSet, AppState, BodyWeightEntry, ExerciseDefinition, LoadType, MeasurementEntry, Program, ProgramExercise, SaveStatus, WeightUnit, Workout } from './types'
-import { backupJson, emptyState, loadState, parseBackup, saveState } from './storage'
-import { compareSets, continueFreeWorkout, displayWeight, makeExercise, makeProgram, makeSet, nextPosition, normalizeSet, parseDecimal, parseReps, previousWorkoutForExercise, startWorkout, switchExerciseUnit, timerRemaining, toKg, uid, workoutVolumeKg } from './domain'
+import { backupJson, createAutoSnapshotIfNeeded, createLocalSnapshot, emptyState, listLocalSnapshots, loadState, parseBackup, saveState } from './storage'
+import type { LocalSnapshot } from './storage'
+import { compareSets, continueFreeWorkout, displayWeight, makeExercise, makeProgram, makeSet, nextPosition, normalizeSet, parseDecimal, parseReps, previousWorkoutForExercise, startWorkout, switchExerciseUnit, timerRemaining, toKg, trainingSummary, uid, workoutVolumeKg } from './domain'
 
 type Tab = 'home' | 'workouts' | 'progress' | 'profile'
 type ProgressTab = 'strength' | 'body' | 'measurements'
@@ -21,6 +22,17 @@ const applyLoadType = (exercise: ProgramExercise | Workout['exercises'][number],
       set.actualWeightKg = null
     }
   })
+}
+const playRestSignal = (sound: boolean, vibration: boolean) => {
+  if (vibration && 'vibrate' in navigator) navigator.vibrate([180, 80, 180])
+  if (!sound) return
+  try {
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextClass) return
+    const context = new AudioContextClass(); const oscillator = context.createOscillator(); const gain = context.createGain()
+    oscillator.frequency.value = 880; gain.gain.setValueAtTime(.12, context.currentTime); gain.gain.exponentialRampToValueAtTime(.001, context.currentTime + .45)
+    oscillator.connect(gain); gain.connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime + .45); oscillator.onended = () => void context.close()
+  } catch { /* Browser blocked the optional signal. */ }
 }
 const clampNumber = (value: string, fallback = 0) => Math.max(0, Number.parseInt(value || `${fallback}`, 10) || 0)
 const ACCENT_PRESETS = [
@@ -93,6 +105,20 @@ function SavePill({ status }: { status: SaveStatus }) {
   return <span className={`save-pill ${status}`} aria-live="polite">{labels[status]}</span>
 }
 
+function Onboarding({ onDone }: { onDone: () => void }) {
+  return <main className="onboarding-screen">
+    <img src={`${import.meta.env.BASE_URL}pawer-logo-transparent.png`} alt="PAWER" />
+    <p className="eyebrow">Быстрый старт</p><h1>Тренировка без лишних догадок</h1>
+    <div className="onboarding-cards">
+      <article><span>1</span><div><strong>Собственный вес</strong><p>Выбери этот тип нагрузки — поле веса исчезнет, останутся только повторения.</p></div></article>
+      <article><span>2</span><div><strong>Поиск и добавление</strong><p>Введи название один раз: PAWER предложит сохранённое упражнение или создаст новое.</p></div></article>
+      <article><span>3</span><div><strong>Отдых и продолжение</strong><p>После подхода включится таймер. «Пауза» сохраняет тренировку, «Завершить» закрывает её.</p></div></article>
+    </div>
+    <button className="primary wide" onClick={onDone}>Понятно, открыть PAWER</button>
+    <small>Подсказки и настройки всегда доступны в профиле.</small>
+  </main>
+}
+
 export default function App() {
   const [data, setData] = useState<AppState>(emptyState)
   const [ready, setReady] = useState(false)
@@ -104,7 +130,7 @@ export default function App() {
   const firstSave = useRef(true)
 
   useEffect(() => {
-    loadState().then(setData).catch(() => setSaveStatus('error')).finally(() => setReady(true))
+    loadState().then(state => { setData(state); void createAutoSnapshotIfNeeded(state).catch(() => undefined) }).catch(() => setSaveStatus('error')).finally(() => setReady(true))
   }, [])
 
   useEffect(() => {
@@ -179,6 +205,7 @@ export default function App() {
     const workout = startWorkout(program)
     update(draft => {
       draft.workouts.unshift(workout)
+      workout.exercises.forEach(exercise => { const definition = draft.definitions.find(item => item.id === exercise.exerciseDefinitionId); if (definition) definition.lastUsedAt = workout.startedAt })
     })
     setViewWorkoutId(workout.id)
   }
@@ -195,6 +222,8 @@ export default function App() {
   }
 
   if (!ready) return <main className="loading-screen"><div className="brand-mark">PA</div><p>Открываем журнал…</p></main>
+
+  if (!data.settings.onboardingDone) return <Onboarding onDone={() => update(draft => { draft.settings.onboardingDone = true })} />
 
   if (openWorkout && openWorkout.status !== 'completed') {
     return <WorkoutRunner data={data} workout={openWorkout} saveStatus={saveStatus} update={update} onClose={() => { setViewWorkoutId(null); setTab('home') }} onComplete={id => { setSummaryWorkoutId(id); setViewWorkoutId(null) }} />
@@ -316,6 +345,7 @@ function ExerciseEditor({ exercise, zone, index, total, onEdit, onZone, onMove, 
     </div>
     <div className="set-actions"><button onClick={() => onEdit(ex => { const next = makeSet(ex.unit, ex.sets.at(-1)); if (ex.loadType === 'bodyweight') { next.weightInput = ''; next.weightKg = null } ex.sets.push(next) })}>＋ Подход</button>{exercise.loadType !== 'bodyweight' && <button onClick={() => { const value = exercise.sets[0]?.weightInput; if (value !== undefined) onEdit(ex => { ex.sets = ex.sets.map(s => normalizeSet({ ...s, weightInput: value }, ex.unit)) }) }}>Применить первый вес ко всем</button>}</div>
     <div className="rest-grid"><label>Между подходами, сек<input inputMode="numeric" value={exercise.restBetweenSec} onChange={e => onEdit(ex => { ex.restBetweenSec = clampNumber(e.target.value) })} /></label><label>После упражнения, сек<input inputMode="numeric" value={exercise.restAfterSec} onChange={e => onEdit(ex => { ex.restAfterSec = clampNumber(e.target.value) })} /></label></div>
+    <div className="editor-rest-presets"><span>Быстрый отдых между подходами</span><div>{[60, 90, 120, 180].map(seconds => <button key={seconds} className={exercise.restBetweenSec === seconds ? 'active' : ''} onClick={() => onEdit(ex => { ex.restBetweenSec = seconds })}>{seconds < 120 ? `${seconds} сек` : `${seconds / 60} мин`}</button>)}</div></div>
     <label className="note-field">Заметка<input value={exercise.note} placeholder="Необязательно" onChange={e => onEdit(ex => { ex.note = e.target.value })} /></label>
     <div className="reorder-row"><button disabled={index === 0} onClick={() => onMove(-1)}>↑ Выше</button><button disabled={index === total - 1} onClick={() => onMove(1)}>↓ Ниже</button></div>
   </article>
@@ -328,7 +358,9 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
   const [showAdd, setShowAdd] = useState(false)
   const [dismissedNextPicker, setDismissedNextPicker] = useState(false)
   const [editingPast, setEditingPast] = useState<{ exercise: number; set: number } | null>(null)
+  const [undoWorkout, setUndoWorkout] = useState<Workout | null>(null)
   const completionLock = useRef(false)
+  const signalledTimer = useRef<string | null>(null)
   const exercise = workout.exercises[workout.currentExerciseIndex]
   const set = exercise?.sets[workout.currentSetIndex]
 
@@ -337,14 +369,26 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
     const refresh = () => {
       const left = timerRemaining(workout.timer!)
       setRemaining(left)
-      if (left <= 0 && !workout.timer?.paused) update(draft => { const w = draft.workouts.find(x => x.id === workout.id); if (w?.timer && timerRemaining(w.timer) <= 0) w.timer = null })
+      if (left <= 0 && !workout.timer?.paused) {
+        const signalKey = `${workout.timer?.kind}-${workout.timer?.endAt}`
+        if (signalledTimer.current !== signalKey) { signalledTimer.current = signalKey; playRestSignal(data.settings.sound, data.settings.vibration) }
+        update(draft => { const w = draft.workouts.find(x => x.id === workout.id); if (w?.timer && timerRemaining(w.timer) <= 0) w.timer = null })
+      }
     }
     refresh()
     const id = window.setInterval(refresh, 500)
     const visible = () => refresh()
     document.addEventListener('visibilitychange', visible)
     return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', visible) }
-  }, [workout.id, workout.timer?.endAt, workout.timer?.paused, workout.timer?.remainingSec])
+  }, [workout.id, workout.timer?.endAt, workout.timer?.paused, workout.timer?.remainingSec, data.settings.sound, data.settings.vibration])
+
+  useEffect(() => {
+    if (!data.settings.keepAwake || workout.status !== 'active' || !('wakeLock' in navigator)) return
+    let released = false; let lock: { release: () => Promise<void> } | undefined
+    const request = async () => { try { lock = await (navigator as Navigator & { wakeLock: { request: (kind: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock.request('screen'); if (released) await lock.release() } catch { /* Optional capability. */ } }
+    void request()
+    return () => { released = true; void lock?.release() }
+  }, [data.settings.keepAwake, workout.status])
 
   const addPicker = (showAdd || (workout.awaitingNextExercise && !workout.timer && !dismissedNextPicker)) && <ExercisePicker mode="add" definitions={data.definitions} currentDefinitionId="" onClose={() => { setShowAdd(false); setDismissedNextPicker(true) }} onSelect={definition => { update(d => appendExerciseToWorkout(d, workout.id, definition)); setShowAdd(false); setDismissedNextPicker(false) }} onCreate={(name, category) => { update(d => { const definition: ExerciseDefinition = { id: uid(), name, category, createdAt: new Date().toISOString() }; d.definitions.push(definition); appendExerciseToWorkout(d, workout.id, definition) }); setShowAdd(false); setDismissedNextPicker(false) }} />
 
@@ -366,9 +410,21 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
     else { target.actualWeightInput = value; const parsed = parseDecimal(value); target.actualWeightKg = parsed === null ? null : toKg(parsed, ex.unit) }
   })
 
+  const fillSet = (source?: Pick<ActualSet, 'actualWeightInput' | 'actualWeightKg' | 'actualRepsInput'> | null) => {
+    if (!source) return
+    update(draft => { const target = draft.workouts.find(x => x.id === workout.id)?.exercises[workout.currentExerciseIndex]?.sets[workout.currentSetIndex]; if (!target) return; target.actualWeightInput = exercise.loadType === 'bodyweight' ? '' : source.actualWeightInput; target.actualWeightKg = exercise.loadType === 'bodyweight' ? null : source.actualWeightKg; target.actualRepsInput = source.actualRepsInput })
+  }
+  const lastCompletedSet = exercise.sets.slice(0, workout.currentSetIndex).reverse().find(item => item.status === 'completed')
+  const bumpReps = () => editActual('actualRepsInput', `${(parseReps(set.actualRepsInput) ?? parseReps(set.repsInput) ?? 0) + 1}`)
+  const bumpWeight = () => {
+    const current = parseDecimal(set.actualWeightInput) ?? parseDecimal(set.weightInput) ?? 0
+    editActual('actualWeightInput', `${Number((current + (exercise.unit === 'kg' ? 2.5 : 5)).toFixed(2))}`.replace('.', ','))
+  }
+
   const confirmSet = () => {
     if (!valid || completionLock.current || set.status === 'completed') return
     completionLock.current = true
+    setUndoWorkout(structuredClone(workout))
     update(draft => {
       const w = draft.workouts.find(x => x.id === workout.id); if (!w) return
       const target = w.exercises[w.currentExerciseIndex]?.sets[w.currentSetIndex]; if (!target || target.status === 'completed') return
@@ -416,7 +472,7 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
         </section>
         <section className="actual-panel"><div className="actual-panel-heading"><h2>Сейчас</h2><label>Тип нагрузки<select value={exercise.loadType} onChange={e => update(draft => { const ex = draft.workouts.find(x => x.id === workout.id)?.exercises[workout.currentExerciseIndex]; if (ex) applyLoadType(ex, e.target.value as LoadType) })}><option value="external">С отягощением</option><option value="bodyweight">Собственный вес</option><option value="assisted">С противовесом</option></select></label></div>{exercise.loadType === 'bodyweight' && <p className="bodyweight-hint runner-bodyweight-hint">Вес вводить не нужно — запиши только повторения.</p>}<div className={`actual-inputs ${exercise.loadType === 'bodyweight' ? 'bodyweight-inputs' : ''}`}>
           {exercise.loadType !== 'bodyweight' && <><label><span>{exercise.loadType === 'assisted' ? 'Помощь' : 'Вес'}, {weightUnitLabel(exercise.unit)}</span><input inputMode="decimal" value={set.actualWeightInput} placeholder="—" onChange={e => editActual('actualWeightInput', e.target.value)} /></label><span className="multiply">×</span></>}<label><span>Повторения</span><input inputMode="numeric" value={set.actualRepsInput} placeholder="—" onChange={e => editActual('actualRepsInput', e.target.value)} /></label>
-        </div>{!valid && <p className="field-error">Заполни корректные фактические значения.</p>}</section>
+        </div><div className="quick-set-tools"><button onClick={() => fillSet(lastCompletedSet ?? previousSet)}>↺ Прошлый подход</button><button onClick={bumpReps}>＋1 повтор</button>{exercise.loadType !== 'bodyweight' && <button onClick={bumpWeight}>＋{exercise.unit === 'kg' ? '2,5' : '5'} {weightUnitLabel(exercise.unit)}</button>}</div>{!valid && <p className="field-error">Заполни корректные фактические значения.</p>}</section>
         <div className="runner-links"><button onClick={skipSet}>Пропустить подход</button><button onClick={skipExercise}>Пропустить упражнение</button></div>
         <div className="runner-secondary-actions">
           <button className="secondary replace-workout-exercise" aria-label="Поменять упражнение" onClick={() => setShowReplace(true)}>⇄ Поменять</button>
@@ -424,23 +480,25 @@ function WorkoutRunner({ data, workout, saveStatus, update, onClose, onComplete 
         </div>
         <button className="complete-set" disabled={!valid || set.status === 'completed'} onClick={confirmSet}>{set.status === 'completed' ? '✓ Подход выполнен' : '✓ Выполнил подход'}</button>
       </>}
+      {undoWorkout && <button className="undo-last-set" onClick={() => { update(draft => { const index = draft.workouts.findIndex(item => item.id === workout.id); if (index >= 0) draft.workouts[index] = structuredClone(undoWorkout) }); setUndoWorkout(null) }}>↶ Отменить последний подход</button>}
     </main>
     <footer className="runner-footer"><button onClick={toggleWorkoutPause}>{workout.status === 'paused' ? 'Продолжить тренировку' : 'Пауза тренировки'}</button><button className="danger-text" onClick={() => { if (allSetsResolved || confirm('Завершить тренировку и сохранить выполненную часть?')) finishWorkout(update, workout.id, onComplete) }}>Завершить</button></footer>
     {showList && <WorkoutList workout={workout} update={update} onClose={() => setShowList(false)} onAdd={() => { setShowList(false); setShowAdd(true) }} onSelect={(exerciseIndex, setIndex) => update(d => { const w = d.workouts.find(x => x.id === workout.id); if (w) { w.currentExerciseIndex = exerciseIndex; w.currentSetIndex = setIndex; w.timer = null } })} onEdit={setEditingPast} />}
-    {showReplace && <ExercisePicker definitions={data.definitions} currentDefinitionId={exercise.exerciseDefinitionId} onClose={() => setShowReplace(false)} onSelect={definition => { if (exercise.sets.some(item => item.status !== 'pending') && !confirm('Заменить упражнение и удалить уже отмеченные в нём подходы?')) return; update(d => replaceExerciseInWorkout(d, workout.id, workout.currentExerciseIndex, definition)); setShowReplace(false) }} onCreate={(name, category) => { if (exercise.sets.some(item => item.status !== 'pending') && !confirm('Заменить упражнение и удалить уже отмеченные в нём подходы?')) return; update(d => { const definition: ExerciseDefinition = { id: uid(), name, category, createdAt: new Date().toISOString() }; d.definitions.push(definition); replaceExerciseInWorkout(d, workout.id, workout.currentExerciseIndex, definition) }); setShowReplace(false) }} />}
+    {showReplace && <ExercisePicker definitions={data.definitions} currentDefinitionId={exercise.exerciseDefinitionId} preferredCategory={data.definitions.find(item => item.id === exercise.exerciseDefinitionId)?.category} onClose={() => setShowReplace(false)} onSelect={definition => { if (exercise.sets.some(item => item.status !== 'pending') && !confirm('Заменить упражнение и удалить уже отмеченные в нём подходы?')) return; update(d => replaceExerciseInWorkout(d, workout.id, workout.currentExerciseIndex, definition)); setShowReplace(false) }} onCreate={(name, category) => { if (exercise.sets.some(item => item.status !== 'pending') && !confirm('Заменить упражнение и удалить уже отмеченные в нём подходы?')) return; update(d => { const definition: ExerciseDefinition = { id: uid(), name, category, createdAt: new Date().toISOString() }; d.definitions.push(definition); replaceExerciseInWorkout(d, workout.id, workout.currentExerciseIndex, definition) }); setShowReplace(false) }} />}
     {addPicker}
     {editingPast && <EditPastSet workout={workout} position={editingPast} onEdit={editActual} update={update} onClose={() => setEditingPast(null)} />}
   </div>
 }
 
-function ExercisePicker({ definitions, currentDefinitionId, onClose, onSelect, onCreate, mode = 'replace' }: { definitions: ExerciseDefinition[]; currentDefinitionId: string; onClose: () => void; onSelect: (definition: ExerciseDefinition) => void; onCreate: (name: string, category?: string) => void; mode?: 'replace' | 'add' }) {
+function ExercisePicker({ definitions, currentDefinitionId, preferredCategory, onClose, onSelect, onCreate, mode = 'replace' }: { definitions: ExerciseDefinition[]; currentDefinitionId: string; preferredCategory?: string; onClose: () => void; onSelect: (definition: ExerciseDefinition) => void; onCreate: (name: string, category?: string) => void; mode?: 'replace' | 'add' }) {
   const [query, setQuery] = useState('')
   const [newCategory, setNewCategory] = useState('')
   const normalizedQuery = query.trim().toLocaleLowerCase('ru')
   const available = definitions
     .filter(definition => definition.id !== currentDefinitionId && (!normalizedQuery || definition.name.toLocaleLowerCase('ru').includes(normalizedQuery)))
-    .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-  const sections = [...EXERCISE_ZONES, { value: '', label: 'Без зоны' }]
+    .sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite) || (b.lastUsedAt ?? '').localeCompare(a.lastUsedAt ?? '') || a.name.localeCompare(b.name, 'ru'))
+  const sections: { value: string; label: string }[] = [...EXERCISE_ZONES].sort((a, b) => Number(b.value === preferredCategory) - Number(a.value === preferredCategory))
+  sections.push({ value: '', label: 'Без зоны' })
   const create = () => {
     const name = query.trim()
     if (!name) return
@@ -451,7 +509,7 @@ function ExercisePicker({ definitions, currentDefinitionId, onClose, onSelect, o
     <div className="sheet-scroll exercise-groups">{sections.map(section => {
       const items = available.filter(definition => section.value ? definition.category === section.value : !EXERCISE_ZONES.some(zone => zone.value === definition.category))
       if (!items.length) return null
-      return <section className={`exercise-group ${section.value ? '' : 'unassigned'}`} key={section.value || 'unassigned'}><h3>{section.label}</h3><div>{items.map(definition => <button className="exercise-choice" key={definition.id} onClick={() => onSelect(definition)}><span>{definition.name}</span><strong>Выбрать</strong></button>)}</div></section>
+      return <section className={`exercise-group ${section.value ? '' : 'unassigned'} ${section.value === preferredCategory ? 'recommended' : ''}`} key={section.value || 'unassigned'}><h3>{section.value === preferredCategory ? `Подходит по зоне · ${section.label}` : section.label}</h3><div>{items.map(definition => <button className="exercise-choice" key={definition.id} onClick={() => onSelect(definition)}><span><b>{definition.favorite ? '★ ' : ''}{definition.name}</b>{(definition.equipment || definition.lastUsedAt) && <small>{definition.equipment || `Недавно: ${fmtDate(definition.lastUsedAt!)}`}</small>}</span><strong>Выбрать</strong></button>)}</div></section>
     })}{!available.length && (query.trim() ? <section className="picker-create"><small>Такого упражнения ещё нет</small><strong>«{query.trim()}»</strong><select aria-label="Зона нового упражнения" value={newCategory} onChange={event => setNewCategory(event.target.value)}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select><button className="primary wide" onClick={create}>＋ Добавить новое упражнение</button></section> : <p className="picker-empty">Начни вводить название — здесь появятся совпадения.</p>)}</div>
   </div></div>
 }
@@ -466,8 +524,14 @@ function RestScreen({ workout, remaining, update }: { workout: Workout; remainin
     if (w.timer.paused) { w.timer.paused = false; w.timer.endAt = Date.now() + w.timer.remainingSec * 1000 }
     else { w.timer.remainingSec = timerRemaining(w.timer); w.timer.paused = true; w.timer.endAt = null }
   })
+  const setDuration = (seconds: number) => mutate(w => {
+    if (!w.timer) return
+    w.timer.durationSec = seconds; w.timer.remainingSec = seconds
+    w.timer.endAt = w.timer.paused ? null : Date.now() + seconds * 1000
+  })
   return <section className="rest-screen"><p className="eyebrow">{timer.kind === 'between' ? 'Отдых между подходами' : 'Отдых после упражнения'}</p><div className="timer-ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52"/><circle className="timer-progress" cx="60" cy="60" r="52" style={{ strokeDashoffset: 327 - 327 * Math.min(1, remaining / Math.max(1, timer.durationSec)) }} /></svg><strong>{fmtTime(remaining)}</strong></div>
     <div className="next-card"><small>Дальше</small>{workout.awaitingNextExercise ? <><strong>Следующее упражнение</strong><span>Выберешь его после отдыха</span></> : <><strong>{ex?.name}</strong><span>Подход {workout.currentSetIndex + 1}: {ex && set ? setResultLabel(ex, set.actualWeightInput || set.weightInput, set.actualRepsInput || set.repsInput) : '—'}</span></>}</div>
+    <div className="rest-presets" aria-label="Быстрый выбор отдыха">{[60, 90, 120, 180].map(seconds => <button key={seconds} className={timer.durationSec === seconds ? 'active' : ''} onClick={() => setDuration(seconds)}>{fmtTime(seconds)}</button>)}</div>
     <div className="timer-actions"><button className="primary" onClick={() => mutate(w => { w.timer = null })}>Пропустить отдых</button><button className="secondary" onClick={() => mutate(w => { if (!w.timer) return; if (w.timer.paused) w.timer.remainingSec += 30; else if (w.timer.endAt) w.timer.endAt += 30000 })}>＋30 секунд</button><button className="secondary" onClick={togglePause}>{timer.paused ? 'Продолжить' : 'Пауза'}</button></div>
     <p className="timer-note">Следующий подход не отметится автоматически.</p>
   </section>
@@ -512,7 +576,7 @@ function workoutExerciseForDefinition(state: AppState, definition: ExerciseDefin
     const templateSetId = isActual ? sourceSet.templateSetId : sourceSet.id
     return { id: uid(), templateSetId, weightInput, weightKg, repsInput, actualWeightInput: weightInput, actualWeightKg: weightKg, actualRepsInput: repsInput, status: 'pending' as const }
   })
-  return { id: uid(), exerciseDefinitionId: definition.id, name: definition.name, unit: base.unit, loadType: base.loadType, sets, restBetweenSec: base.restBetweenSec, restAfterSec: base.restAfterSec, note: base.note }
+  return { id: uid(), exerciseDefinitionId: definition.id, name: definition.name, unit: base.unit, loadType: base.loadType, sets, restBetweenSec: base.restBetweenSec, restAfterSec: base.restAfterSec, note: base.note || definition.notes || '' }
 }
 
 function appendExerciseToWorkout(state: AppState, workoutId: string, definition: ExerciseDefinition) {
@@ -523,6 +587,8 @@ function appendExerciseToWorkout(state: AppState, workoutId: string, definition:
   workout.currentSetIndex = 0
   workout.awaitingNextExercise = false
   workout.timer = null
+  const storedDefinition = state.definitions.find(item => item.id === definition.id)
+  if (storedDefinition) storedDefinition.lastUsedAt = new Date().toISOString()
 }
 
 function replaceExerciseInWorkout(state: AppState, workoutId: string, exerciseIndex: number, definition: ExerciseDefinition) {
@@ -532,6 +598,8 @@ function replaceExerciseInWorkout(state: AppState, workoutId: string, exerciseIn
   workout.currentExerciseIndex = exerciseIndex
   workout.currentSetIndex = 0
   workout.timer = null
+  const storedDefinition = state.definitions.find(item => item.id === definition.id)
+  if (storedDefinition) storedDefinition.lastUsedAt = new Date().toISOString()
 }
 
 function workoutProgress(w: Workout) {
@@ -549,6 +617,7 @@ function Progress({ data, update }: { data: AppState; update: (fn: (draft: AppSt
   const [section, setSection] = useState<ProgressTab>('strength')
   return <>
     <section className="page-title"><p className="eyebrow">Прогресс</p><h1>Результаты без догадок</h1></section>
+    <TrainingInsights data={data} />
     <div className="segmented three"><button className={section === 'strength' ? 'active' : ''} onClick={() => setSection('strength')}>Силовые</button><button className={section === 'body' ? 'active' : ''} onClick={() => setSection('body')}>Вес тела</button><button className={section === 'measurements' ? 'active' : ''} onClick={() => setSection('measurements')}>Замеры</button></div>
     {section === 'strength' && <StrengthProgress data={data} />}
     {section === 'body' && <BodyProgress data={data} update={update} />}
@@ -556,11 +625,23 @@ function Progress({ data, update }: { data: AppState; update: (fn: (draft: AppSt
   </>
 }
 
+function TrainingInsights({ data }: { data: AppState }) {
+  const summary = trainingSummary(data)
+  const missing = EXERCISE_ZONES.filter(zone => !summary.trainedCategories.includes(zone.value))
+  return <section className="training-insights">
+    <div className="insight-title"><div><p className="eyebrow">Последние 7 дней</p><h2>{summary.workouts ? `${summary.workouts} тренировки` : 'Начни недельную серию'}</h2></div>{summary.latestWorkoutAt && <small>Последняя: {fmtDate(summary.latestWorkoutAt)}</small>}</div>
+    <div className="insight-grid"><div><strong>{summary.completedSets}</strong><span>подходов</span></div><div><strong>{Math.round(summary.volumeKg).toLocaleString('ru')}</strong><span>кг объёма</span></div><div><strong>{summary.trainedCategories.length}</strong><span>зон тела</span></div></div>
+    {summary.workouts > 0 && <div className="zone-badges"><span>Можно добавить:</span>{missing.length ? missing.map(zone => <small key={zone.value}>{zone.label}</small>) : <small className="complete">Все зоны отмечены ✓</small>}</div>}
+  </section>
+}
+
 function StrengthProgress({ data }: { data: AppState }) {
   const usedDefinitions = data.definitions.filter(def => data.workouts.some(w => w.status === 'completed' && w.exercises.some(e => e.exerciseDefinitionId === def.id)))
   const [definitionId, setDefinitionId] = useState(usedDefinitions[0]?.id ?? '')
   const [metric, setMetric] = useState<'weight' | 'reps' | 'volume'>('weight')
   const [period, setPeriod] = useState<'1m' | '3m' | '6m' | '1y' | 'all'>('3m')
+  const selectedLoadType = data.workouts.flatMap(workout => workout.exercises).find(exercise => exercise.exerciseDefinitionId === definitionId)?.loadType
+  useEffect(() => { if (selectedLoadType === 'bodyweight' && metric !== 'reps') setMetric('reps') }, [selectedLoadType, metric])
   const cutoffDays = { '1m': 31, '3m': 93, '6m': 186, '1y': 366, all: Infinity }[period]
   const points = data.workouts.filter(w => w.status === 'completed' && Date.now() - Date.parse(w.finishedAt ?? w.startedAt) <= cutoffDays * 86400000).flatMap(w => {
     const ex = w.exercises.find(e => e.exerciseDefinitionId === definitionId); if (!ex) return []
@@ -575,7 +656,7 @@ function StrengthProgress({ data }: { data: AppState }) {
   const definition = data.definitions.find(d => d.id === definitionId)
   return <section className="progress-panel">
     {usedDefinitions.length ? <><label className="select-field">Упражнение<select value={definitionId} onChange={e => setDefinitionId(e.target.value)}>{usedDefinitions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
-      <div className="choice-row"><button className={metric === 'weight' ? 'active' : ''} onClick={() => setMetric('weight')}>Макс. вес</button><button className={metric === 'reps' ? 'active' : ''} onClick={() => setMetric('reps')}>Повторения</button><button className={metric === 'volume' ? 'active' : ''} onClick={() => setMetric('volume')}>Объём</button></div>
+      <div className={`choice-row ${selectedLoadType === 'bodyweight' ? 'bodyweight-metrics' : ''}`}>{selectedLoadType !== 'bodyweight' && <button className={metric === 'weight' ? 'active' : ''} onClick={() => setMetric('weight')}>Макс. вес</button>}<button className={metric === 'reps' ? 'active' : ''} onClick={() => setMetric('reps')}>Повторения</button>{selectedLoadType !== 'bodyweight' && <button className={metric === 'volume' ? 'active' : ''} onClick={() => setMetric('volume')}>Объём</button>}</div>
       <Chart points={points} unit={metric === 'weight' || metric === 'volume' ? 'кг' : 'повт.'} label={metric === 'weight' ? 'Максимальный выполненный вес за тренировку' : metric === 'volume' ? 'Объём упражнения' : 'Максимум повторений в подходе'} />
       <PeriodPicker value={period} onChange={setPeriod} />
       <div className="records"><h3>Записи: {definition?.name}</h3>{points.slice().reverse().map((p, i) => <div key={`${p.date}-${i}`}><span>{fmtDate(p.date)}</span><strong>{Number(p.value.toFixed(1)).toLocaleString('ru')} {metric === 'weight' || metric === 'volume' ? 'кг' : ''}</strong><small>{p.detail}</small></div>)}</div>
@@ -634,12 +715,25 @@ function Profile({ data, replaceData, update }: { data: AppState; replaceData: (
   const fileRef = useRef<HTMLInputElement>(null)
   const characterRef = useRef<HTMLInputElement>(null)
   const wallpaperRef = useRef<HTMLInputElement>(null)
+  const [snapshots, setSnapshots] = useState<LocalSnapshot[]>([])
+  const [snapshotBusy, setSnapshotBusy] = useState(false)
+  const refreshSnapshots = () => listLocalSnapshots().then(setSnapshots).catch(() => setSnapshots([]))
+  useEffect(() => { void refreshSnapshots() }, [])
+  const makeSnapshot = async () => {
+    setSnapshotBusy(true)
+    try { await createLocalSnapshot(data); await refreshSnapshots() } finally { setSnapshotBusy(false) }
+  }
+  const rollback = async (snapshot: LocalSnapshot) => {
+    if (!confirm(`Вернуть данные на ${fmtDate(snapshot.createdAt)}? Текущее состояние сначала сохранится отдельной копией.`)) return
+    setSnapshotBusy(true)
+    try { await createLocalSnapshot(data); replaceData(structuredClone(snapshot.data)); await refreshSnapshots() } finally { setSnapshotBusy(false) }
+  }
   const downloadBackup = () => {
     const blob = new Blob([backupJson(data)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `dogfit-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url)
   }
   const restore = async (file?: File) => {
     if (!file) return
-    try { const state = parseBackup(await file.text()); if (confirm('Заменить текущие данные содержимым резервной копии?')) replaceData(state) } catch (error) { alert(error instanceof Error ? error.message : 'Не удалось прочитать копию') } finally { if (fileRef.current) fileRef.current.value = '' }
+    try { const state = parseBackup(await file.text()); if (confirm('Заменить текущие данные содержимым резервной копии? Текущее состояние сначала сохранится локальным снимком.')) { await createLocalSnapshot(data); replaceData(state); await refreshSnapshots() } } catch (error) { alert(error instanceof Error ? error.message : 'Не удалось прочитать копию') } finally { if (fileRef.current) fileRef.current.value = '' }
   }
   const saveAppearanceImage = async (kind: 'character' | 'wallpaper', file?: File) => {
     if (!file) return
@@ -685,7 +779,7 @@ function Profile({ data, replaceData, update }: { data: AppState; replaceData: (
       </div>
     </section>
     <ExerciseCatalog data={data} update={update} />
-    <section className="settings-card"><h2>Резервная копия</h2><button className="primary wide" onClick={downloadBackup}>Экспортировать данные</button><button className="secondary wide" onClick={() => fileRef.current?.click()}>Восстановить из файла</button><input ref={fileRef} hidden type="file" accept="application/json,.json" onChange={e => restore(e.target.files?.[0])} /><p>Перед восстановлением приложение проверяет тип и версию файла.</p></section>
+    <section className="settings-card backup-card"><h2>Резервная копия</h2><p>PAWER автоматически хранит до пяти локальных снимков. Перед любым откатом текущее состояние сохраняется ещё раз.</p><button className="primary wide" disabled={snapshotBusy} onClick={() => void makeSnapshot()}>{snapshotBusy ? 'Сохраняем…' : 'Создать точку восстановления'}</button>{snapshots.length > 0 && <div className="snapshot-list">{snapshots.map(snapshot => <div key={snapshot.key}><span><strong>{fmtDate(snapshot.createdAt)}</strong><small>{new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' }).format(new Date(snapshot.createdAt))}</small></span><button className="secondary" disabled={snapshotBusy} onClick={() => void rollback(snapshot)}>Откатиться</button></div>)}</div>}<div className="backup-file-actions"><button className="secondary wide" onClick={downloadBackup}>Скачать JSON</button><button className="secondary wide" onClick={() => fileRef.current?.click()}>Восстановить из файла</button></div><input ref={fileRef} hidden type="file" accept="application/json,.json" onChange={e => restore(e.target.files?.[0])} /></section>
     <InBodyImport data={data} update={update} />
     <section className="settings-card"><h2>Во время отдыха</h2><SettingToggle label="Вибрация" description={'vibrate' in navigator ? 'Использовать, если браузер разрешает' : 'Не поддерживается этим браузером'} checked={data.settings.vibration} disabled={!('vibrate' in navigator)} onChange={value => update(d => { d.settings.vibration = value })} /><SettingToggle label="Звуковой сигнал" description="Срабатывание на заблокированном iPhone не гарантируется" checked={data.settings.sound} onChange={value => update(d => { d.settings.sound = value })} /><SettingToggle label="Не гасить экран" description={'wakeLock' in navigator ? 'Использовать при поддержке системы' : 'Wake Lock недоступен'} checked={data.settings.keepAwake} disabled={!('wakeLock' in navigator)} onChange={value => update(d => { d.settings.keepAwake = value })} /></section>
     <section className="settings-card about-card"><span className="logo-badge">PA</span><div><h2>PAWER</h2><p>Локальный журнал тренировок · версия 1.0</p></div></section>
@@ -699,8 +793,9 @@ function ExerciseCatalog({ data, update }: { data: AppState; update: (fn: (draft
     const bUnassigned = knownZone(b.category) ? 1 : 0
     return aUnassigned - bUnassigned || a.name.localeCompare(b.name, 'ru')
   })
-  return <section className="settings-card exercise-catalog"><h2>Каталог упражнений</h2><p>Назначай зону упражнениям. Без зоны они остаются в отдельной группе.</p>
-    {items.length ? <div className="catalog-list">{items.map(definition => <label className="catalog-row" key={definition.id}><span><strong>{definition.name}</strong><small>{knownZone(definition.category) ? EXERCISE_ZONES.find(zone => zone.value === definition.category)?.label : 'Без зоны'}</small></span><select aria-label={`Зона упражнения ${definition.name}`} value={knownZone(definition.category) ? definition.category : ''} onChange={event => update(draft => { const target = draft.definitions.find(item => item.id === definition.id); if (target) target.category = event.target.value || undefined })}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></label>)}</div> : <p className="catalog-empty">Упражнения появятся здесь после добавления в программу.</p>}
+  const edit = (id: string, fn: (definition: ExerciseDefinition) => void) => update(draft => { const target = draft.definitions.find(item => item.id === id); if (target) fn(target) })
+  return <section className="settings-card exercise-catalog"><h2>Карточки упражнений</h2><p>Избранные будут выше в поиске. Можно сохранить оборудование и короткую подсказку по технике.</p>
+    {items.length ? <div className="catalog-list">{items.map(definition => <article className="catalog-row" key={definition.id}><div className="catalog-row-head"><span><strong>{definition.name}</strong><small>{knownZone(definition.category) ? EXERCISE_ZONES.find(zone => zone.value === definition.category)?.label : 'Без зоны'}</small></span><button className={definition.favorite ? 'favorite active' : 'favorite'} aria-label={definition.favorite ? `Убрать ${definition.name} из избранного` : `Добавить ${definition.name} в избранное`} onClick={() => edit(definition.id, target => { target.favorite = !target.favorite })}>{definition.favorite ? '★' : '☆'}</button></div><div className="catalog-fields"><label>Зона<select aria-label={`Зона упражнения ${definition.name}`} value={knownZone(definition.category) ? definition.category : ''} onChange={event => edit(definition.id, target => { target.category = event.target.value || undefined })}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></label><label>Оборудование<input value={definition.equipment ?? ''} placeholder="Турник, тренажёр…" onChange={event => edit(definition.id, target => { target.equipment = event.target.value || undefined })} /></label><label className="catalog-note">Подсказка<textarea value={definition.notes ?? ''} placeholder="Техника или важное напоминание" onChange={event => edit(definition.id, target => { target.notes = event.target.value || undefined })} /></label></div></article>)}</div> : <p className="catalog-empty">Упражнения появятся здесь после добавления в программу.</p>}
   </section>
 }
 
@@ -770,6 +865,7 @@ async function fingerprintOf(value: string): Promise<string> {
 
 function WorkoutSummary({ data, workout, update, onClose, onDelete, onUpdateProgram }: { data: AppState; workout: Workout; update: (fn: (draft: AppState) => void) => void; onClose: () => void; onDelete: () => void; onUpdateProgram: () => void }) {
   const [editing, setEditing] = useState(false)
+  const [savedAsProgram, setSavedAsProgram] = useState(false)
   const completed = workout.exercises.reduce((n, e) => n + e.sets.filter(s => s.status === 'completed').length, 0)
   const skipped = workout.exercises.reduce((n, e) => n + e.sets.filter(s => s.status === 'skipped').length, 0)
   const durationMin = Math.max(1, Math.round((Date.parse(workout.finishedAt ?? new Date().toISOString()) - Date.parse(workout.startedAt)) / 60000))
@@ -785,7 +881,7 @@ function WorkoutSummary({ data, workout, update, onClose, onDelete, onUpdateProg
     <div className="summary-signals"><span className="positive">↑ {gains} улучшений</span><span className="negative">↓ {declines} снижений</span><span>○ {skipped} пропусков</span></div>
     <section className="summary-exercises"><h2>По упражнениям</h2>{workout.exercises.map(ex => { const previous = previousWorkoutForExercise(data, workout, ex.exerciseDefinitionId); const prevEx = previous?.exercises.find(p => p.exerciseDefinitionId === ex.exerciseDefinitionId); return <details key={ex.id} open><summary><strong>{ex.name}</strong><span>{ex.sets.filter(s => s.status === 'completed').length}/{ex.sets.length}</span></summary><div>{ex.sets.map((s, i) => { const matched = prevEx?.sets.find(p => p.templateSetId === s.templateSetId); const comparison = prevEx && !matched ? { kind: 'additional' as const, text: 'Дополнительный подход' } : compareSets(s, matched, ex.unit, ex.loadType); return <div className="summary-set" key={s.id}><span>{i + 1}</span>{editing ? <>{ex.loadType !== 'bodyweight' && <><input inputMode="decimal" value={s.actualWeightInput} onChange={e => update(d => { const target = d.workouts.find(x => x.id === workout.id)?.exercises.find(x => x.id === ex.id)?.sets.find(x => x.id === s.id); if (target) { target.actualWeightInput = e.target.value; const v = parseDecimal(e.target.value); target.actualWeightKg = v === null ? null : toKg(v, ex.unit) } })} /><span>{weightUnitLabel(ex.unit)} ×</span></>}<input inputMode="numeric" value={s.actualRepsInput} onChange={e => update(d => { const target = d.workouts.find(x => x.id === workout.id)?.exercises.find(x => x.id === ex.id)?.sets.find(x => x.id === s.id); if (target) target.actualRepsInput = e.target.value.replace(/\D/g, '') })} /></> : <strong>{s.status === 'completed' ? setResultLabel(ex, s.actualWeightInput, s.actualRepsInput) : 'Пропущен'}</strong>}<small className={comparison.kind}>{comparison.text}</small></div>})}</div></details>})}</section>
     {workout.programId && <button className="secondary wide" onClick={() => { if (confirm('Обновить плановые значения программы по этой тренировке?')) onUpdateProgram() }}>Обновить программу по результатам</button>}
-    {!workout.programId && completed > 0 && <button className="secondary wide" onClick={() => update(d => saveWorkoutAsProgram(d, workout))}>Сохранить набор как программу</button>}
+    {!workout.programId && completed > 0 && <button className="secondary wide" disabled={savedAsProgram} onClick={() => { update(d => saveWorkoutAsProgram(d, workout)); setSavedAsProgram(true) }}>{savedAsProgram ? '✓ Программа сохранена' : 'Сохранить набор как программу'}</button>}
     <button className="danger-outline wide" onClick={() => { if (confirm('Удалить эту тренировку из истории? Графики и сравнения будут пересчитаны.')) onDelete() }}>Удалить тренировку</button><button className="primary wide summary-done" onClick={onClose}>Готово</button></div></div>
 }
 

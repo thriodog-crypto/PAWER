@@ -157,6 +157,32 @@ export function workoutVolumeKg(workout: Workout): number {
   }, 0)
 }
 
+export interface TrainingSummary {
+  workouts: number
+  completedSets: number
+  volumeKg: number
+  trainedCategories: string[]
+  latestWorkoutAt?: string
+}
+
+export function trainingSummary(state: AppState, days = 7, now = Date.now()): TrainingSummary {
+  const cutoff = now - days * 86400000
+  const workouts = state.workouts.filter(workout => workout.status === 'completed' && Date.parse(workout.finishedAt ?? workout.startedAt) >= cutoff)
+  const trainedCategories = new Set<string>()
+  workouts.forEach(workout => workout.exercises.forEach(exercise => {
+    if (!exercise.sets.some(set => set.status === 'completed')) return
+    const category = state.definitions.find(definition => definition.id === exercise.exerciseDefinitionId)?.category
+    if (category) trainedCategories.add(category)
+  }))
+  return {
+    workouts: workouts.length,
+    completedSets: workouts.reduce((total, workout) => total + workout.exercises.reduce((sum, exercise) => sum + exercise.sets.filter(set => set.status === 'completed').length, 0), 0),
+    volumeKg: workouts.reduce((total, workout) => total + workoutVolumeKg(workout), 0),
+    trainedCategories: [...trainedCategories],
+    latestWorkoutAt: workouts.slice().sort((a, b) => Date.parse(b.finishedAt ?? b.startedAt) - Date.parse(a.finishedAt ?? a.startedAt))[0]?.finishedAt,
+  }
+}
+
 export function previousWorkoutForExercise(state: AppState, workout: Workout, definitionId: string): Workout | undefined {
   const eligible = state.workouts
     .filter(item => item.id !== workout.id && item.status === 'completed' && item.exercises.some(ex => ex.exerciseDefinitionId === definitionId))

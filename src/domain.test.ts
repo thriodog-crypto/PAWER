@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ActualSet, AppState, Program, Workout } from './types'
-import { compareSets, continueFreeWorkout, fromKg, nextPosition, previousWorkoutForExercise, startWorkout, switchExerciseUnit, timerRemaining, toKg } from './domain'
+import { compareSets, continueFreeWorkout, fromKg, nextPosition, previousWorkoutForExercise, startWorkout, switchExerciseUnit, timerRemaining, toKg, trainingSummary } from './domain'
 
 const actual = (weightKg: number, reps: number, status: ActualSet['status'] = 'completed'): ActualSet => ({
   id: crypto.randomUUID(), templateSetId: crypto.randomUUID(), weightInput: `${weightKg}`, weightKg,
@@ -88,5 +88,19 @@ describe('history independence', () => {
     const otherProgram = { ...startWorkout({ ...baseProgram(), id: 'other' }), id: 'other-workout', status: 'completed' as const, finishedAt: '2025-03-01T10:00:00.000Z' }
     const state = { version: 1, definitions: [], programs: [], workouts: [current, otherProgram, sameProgram], bodyWeights: [], measurements: [], imports: [], settings: { sound: false, vibration: false, keepAwake: false } } satisfies AppState
     expect(previousWorkoutForExercise(state, current, 'lat-pulldown')?.id).toBe('same')
+  })
+})
+
+describe('weekly training summary', () => {
+  it('counts only completed workouts inside the selected window', () => {
+    const workout = startWorkout(baseProgram())
+    workout.status = 'completed'
+    workout.finishedAt = '2025-03-08T12:00:00.000Z'
+    workout.exercises[0].sets[0] = { ...workout.exercises[0].sets[0], status: 'completed', actualWeightKg: 60, actualWeightInput: '60', actualRepsInput: '10' }
+    const oldWorkout = structuredClone(workout)
+    oldWorkout.id = 'old'
+    oldWorkout.finishedAt = '2025-02-01T12:00:00.000Z'
+    const state = { version: 1, definitions: [{ id: 'lat-pulldown', name: 'Тяга сверху', category: 'back', createdAt: '2025-01-01' }], programs: [], workouts: [workout, oldWorkout], bodyWeights: [], measurements: [], imports: [], settings: { sound: false, vibration: false, keepAwake: false } } satisfies AppState
+    expect(trainingSummary(state, 7, Date.parse('2025-03-10T12:00:00.000Z'))).toMatchObject({ workouts: 1, completedSets: 1, volumeKg: 600, trainedCategories: ['back'] })
   })
 })

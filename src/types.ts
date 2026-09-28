@@ -7,6 +7,9 @@ export interface ExerciseDefinition {
   name: string
   category?: string
   notes?: string
+  equipment?: string
+  favorite?: boolean
+  lastUsedAt?: string
   createdAt: string
 }
 
@@ -120,6 +123,7 @@ export interface Settings {
   menuTransparencyPercent?: number
   accentColor?: string
   panelColor?: string
+  onboardingDone?: boolean
 }
 
 export interface AppState {
