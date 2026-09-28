@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ActualSet, AppState, Program, Workout } from './types'
-import { compareSets, continueFreeWorkout, fromKg, nextPosition, previousWorkoutForExercise, startWorkout, switchExerciseUnit, timerRemaining, toKg, trainingSummary } from './domain'
+import { compareSets, continueFreeWorkout, fromKg, nextPosition, previousWorkoutForExercise, removeExerciseDefinition, startWorkout, switchExerciseUnit, timerRemaining, toKg, trainingSummary } from './domain'
 
 const actual = (weightKg: number, reps: number, status: ActualSet['status'] = 'completed'): ActualSet => ({
   id: crypto.randomUUID(), templateSetId: crypto.randomUUID(), weightInput: `${weightKg}`, weightKg,
@@ -102,5 +102,28 @@ describe('weekly training summary', () => {
     oldWorkout.finishedAt = '2025-02-01T12:00:00.000Z'
     const state = { version: 1, definitions: [{ id: 'lat-pulldown', name: 'Тяга сверху', category: 'back', createdAt: '2025-01-01' }], programs: [], workouts: [workout, oldWorkout], bodyWeights: [], measurements: [], imports: [], settings: { sound: false, vibration: false, keepAwake: false } } satisfies AppState
     expect(trainingSummary(state, 7, Date.parse('2025-03-10T12:00:00.000Z'))).toMatchObject({ workouts: 1, completedSets: 1, volumeKg: 600, trainedCategories: ['back'] })
+  })
+})
+
+describe('exercise catalog cleanup', () => {
+  it('merges an exact-name duplicate and rewires programs and history', () => {
+    const program = baseProgram()
+    program.exercises[0].exerciseDefinitionId = 'duplicate'
+    const workout = startWorkout(program)
+    const state: AppState = { version: 1, definitions: [{ id: 'keep', name: 'Горизонтальная тяга', createdAt: '2025-01-01' }, { id: 'duplicate', name: '  горизонтальная   тяга ', category: 'back', favorite: true, createdAt: '2025-01-02' }], programs: [program], workouts: [workout], bodyWeights: [], measurements: [], imports: [], settings: { sound: false, vibration: false, keepAwake: false } }
+    expect(removeExerciseDefinition(state, 'duplicate')).toBe('merged')
+    expect(state.definitions).toHaveLength(1)
+    expect(state.definitions[0]).toMatchObject({ id: 'keep', category: 'back', favorite: true })
+    expect(state.programs[0].exercises[0].exerciseDefinitionId).toBe('keep')
+    expect(state.workouts[0].exercises[0].exerciseDefinitionId).toBe('keep')
+    expect(state.workouts[0].programSnapshot?.exercises[0].exerciseDefinitionId).toBe('keep')
+  })
+
+  it('archives a unique definition that is still used', () => {
+    const program = baseProgram()
+    const state: AppState = { version: 1, definitions: [{ id: 'lat-pulldown', name: 'Тяга сверху', createdAt: '2025-01-01' }], programs: [program], workouts: [], bodyWeights: [], measurements: [], imports: [], settings: { sound: false, vibration: false, keepAwake: false } }
+    expect(removeExerciseDefinition(state, 'lat-pulldown')).toBe('archived')
+    expect(state.definitions[0].archived).toBe(true)
+    expect(state.programs[0].exercises[0].exerciseDefinitionId).toBe('lat-pulldown')
   })
 })

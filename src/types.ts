@@ -10,6 +10,7 @@ export interface ExerciseDefinition {
   equipment?: string
   favorite?: boolean
   lastUsedAt?: string
+  archived?: boolean
   createdAt: string
 }
 

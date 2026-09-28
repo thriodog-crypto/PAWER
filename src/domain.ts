@@ -183,6 +183,35 @@ export function trainingSummary(state: AppState, days = 7, now = Date.now()): Tr
   }
 }
 
+export function removeExerciseDefinition(state: AppState, definitionId: string): 'merged' | 'archived' | 'deleted' | 'missing' {
+  const definition = state.definitions.find(item => item.id === definitionId)
+  if (!definition) return 'missing'
+  const normalizedName = definition.name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru')
+  const duplicate = state.definitions.find(item => item.id !== definitionId && !item.archived && item.name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru') === normalizedName)
+  const allExercises = [
+    ...state.programs.flatMap(program => program.exercises),
+    ...state.workouts.flatMap(workout => workout.exercises),
+    ...state.workouts.flatMap(workout => workout.programSnapshot?.exercises ?? []),
+  ]
+  const references = allExercises.filter(exercise => exercise.exerciseDefinitionId === definitionId)
+  if (duplicate) {
+    duplicate.category ||= definition.category
+    duplicate.notes ||= definition.notes
+    duplicate.equipment ||= definition.equipment
+    duplicate.favorite ||= definition.favorite
+    if ((definition.lastUsedAt ?? '') > (duplicate.lastUsedAt ?? '')) duplicate.lastUsedAt = definition.lastUsedAt
+    references.forEach(exercise => { exercise.exerciseDefinitionId = duplicate.id })
+    state.definitions = state.definitions.filter(item => item.id !== definitionId)
+    return 'merged'
+  }
+  if (references.length) {
+    definition.archived = true
+    return 'archived'
+  }
+  state.definitions = state.definitions.filter(item => item.id !== definitionId)
+  return 'deleted'
+}
+
 export function previousWorkoutForExercise(state: AppState, workout: Workout, definitionId: string): Workout | undefined {
   const eligible = state.workouts
     .filter(item => item.id !== workout.id && item.status === 'completed' && item.exercises.some(ex => ex.exerciseDefinitionId === definitionId))

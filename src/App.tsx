@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActualSet, AppState, BodyWeightEntry, ExerciseDefinition, LoadType, MeasurementEntry, Program, ProgramExercise, SaveStatus, WeightUnit, Workout } from './types'
 import { backupJson, createAutoSnapshotIfNeeded, createLocalSnapshot, emptyState, listLocalSnapshots, loadState, parseBackup, saveState } from './storage'
 import type { LocalSnapshot } from './storage'
-import { compareSets, continueFreeWorkout, displayWeight, makeExercise, makeProgram, makeSet, nextPosition, normalizeSet, parseDecimal, parseReps, previousWorkoutForExercise, startWorkout, switchExerciseUnit, timerRemaining, toKg, trainingSummary, uid, workoutVolumeKg } from './domain'
+import { compareSets, continueFreeWorkout, displayWeight, makeExercise, makeProgram, makeSet, nextPosition, normalizeSet, parseDecimal, parseReps, previousWorkoutForExercise, removeExerciseDefinition, startWorkout, switchExerciseUnit, timerRemaining, toKg, trainingSummary, uid, workoutVolumeKg } from './domain'
 
 type Tab = 'home' | 'workouts' | 'progress' | 'profile'
 type ProgressTab = 'strength' | 'body' | 'measurements'
@@ -317,7 +317,7 @@ function ProgramEditor({ data, program, saveStatus, update, onBack, onSave, onSt
     <main className="editor-content">
       {program.exercises.map((exercise, index) => <ExerciseEditor key={exercise.id} exercise={exercise} zone={data.definitions.find(d => d.id === exercise.exerciseDefinitionId)?.category} index={index} total={program.exercises.length} onEdit={fn => edit((p, draft) => { const ex = p.exercises.find(x => x.id === exercise.id); if (ex) { fn(ex); const def = draft.definitions.find(d => d.id === ex.exerciseDefinitionId); if (def) def.name = ex.name } })} onZone={zone => edit((_p, draft) => { const def = draft.definitions.find(d => d.id === exercise.exerciseDefinitionId); if (def) def.category = zone || undefined })} onMove={delta => move(index, delta)} onDelete={() => edit(p => { p.exercises = p.exercises.filter(e => e.id !== exercise.id) })} />)}
       <button className="add-exercise" onClick={addNew}>＋ <span><strong>Добавить новое упражнение</strong><small>Свободное название, любые подходы</small></span></button>
-      {!!data.definitions.filter(d => !program.exercises.some(e => e.exerciseDefinitionId === d.id)).length && <section className="suggestions"><h3>Из истории упражнений</h3><div>{data.definitions.filter(d => !program.exercises.some(e => e.exerciseDefinitionId === d.id)).slice(0, 8).map(d => <button key={d.id} onClick={() => addExisting(d)}>＋ {d.name}</button>)}</div></section>}
+      {!!data.definitions.filter(d => !d.archived && !program.exercises.some(e => e.exerciseDefinitionId === d.id)).length && <section className="suggestions"><h3>Из истории упражнений</h3><div>{data.definitions.filter(d => !d.archived && !program.exercises.some(e => e.exerciseDefinitionId === d.id)).slice(0, 8).map(d => <button key={d.id} onClick={() => addExisting(d)}>＋ {d.name}</button>)}</div></section>}
       <p className="local-note">Программа сохраняется автоматически на этом устройстве.</p>
     </main>
     <footer className="editor-footer">
@@ -495,7 +495,7 @@ function ExercisePicker({ definitions, currentDefinitionId, preferredCategory, o
   const [newCategory, setNewCategory] = useState('')
   const normalizedQuery = query.trim().toLocaleLowerCase('ru')
   const available = definitions
-    .filter(definition => definition.id !== currentDefinitionId && (!normalizedQuery || definition.name.toLocaleLowerCase('ru').includes(normalizedQuery)))
+    .filter(definition => !definition.archived && definition.id !== currentDefinitionId && (!normalizedQuery || definition.name.toLocaleLowerCase('ru').includes(normalizedQuery)))
     .sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite) || (b.lastUsedAt ?? '').localeCompare(a.lastUsedAt ?? '') || a.name.localeCompare(b.name, 'ru'))
   const sections: { value: string; label: string }[] = [...EXERCISE_ZONES].sort((a, b) => Number(b.value === preferredCategory) - Number(a.value === preferredCategory))
   sections.push({ value: '', label: 'Без зоны' })
@@ -788,14 +788,21 @@ function Profile({ data, replaceData, update }: { data: AppState; replaceData: (
 
 function ExerciseCatalog({ data, update }: { data: AppState; update: (fn: (draft: AppState) => void) => void }) {
   const knownZone = (category?: string) => EXERCISE_ZONES.some(zone => zone.value === category)
-  const items = data.definitions.slice().sort((a, b) => {
+  const items = data.definitions.filter(definition => !definition.archived).sort((a, b) => {
     const aUnassigned = knownZone(a.category) ? 1 : 0
     const bUnassigned = knownZone(b.category) ? 1 : 0
     return aUnassigned - bUnassigned || a.name.localeCompare(b.name, 'ru')
   })
   const edit = (id: string, fn: (definition: ExerciseDefinition) => void) => update(draft => { const target = draft.definitions.find(item => item.id === id); if (target) fn(target) })
+  const remove = (definition: ExerciseDefinition) => {
+    const normalizedName = definition.name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru')
+    const duplicate = data.definitions.some(item => item.id !== definition.id && !item.archived && item.name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru') === normalizedName)
+    const used = data.programs.some(program => program.exercises.some(exercise => exercise.exerciseDefinitionId === definition.id)) || data.workouts.some(workout => workout.exercises.some(exercise => exercise.exerciseDefinitionId === definition.id))
+    const message = duplicate ? `Объединить дубликат «${definition.name}» с одноимённой карточкой? Программы и история сохранятся.` : used ? `Убрать «${definition.name}» из каталога? Упражнение останется в существующих программах и истории.` : `Удалить «${definition.name}» из каталога?`
+    if (confirm(message)) update(draft => { removeExerciseDefinition(draft, definition.id) })
+  }
   return <section className="settings-card exercise-catalog"><h2>Карточки упражнений</h2><p>Избранные будут выше в поиске. Можно сохранить оборудование и короткую подсказку по технике.</p>
-    {items.length ? <div className="catalog-list">{items.map(definition => <article className="catalog-row" key={definition.id}><div className="catalog-row-head"><span><strong>{definition.name}</strong><small>{knownZone(definition.category) ? EXERCISE_ZONES.find(zone => zone.value === definition.category)?.label : 'Без зоны'}</small></span><button className={definition.favorite ? 'favorite active' : 'favorite'} aria-label={definition.favorite ? `Убрать ${definition.name} из избранного` : `Добавить ${definition.name} в избранное`} onClick={() => edit(definition.id, target => { target.favorite = !target.favorite })}>{definition.favorite ? '★' : '☆'}</button></div><div className="catalog-fields"><label>Зона<select aria-label={`Зона упражнения ${definition.name}`} value={knownZone(definition.category) ? definition.category : ''} onChange={event => edit(definition.id, target => { target.category = event.target.value || undefined })}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></label><label>Оборудование<input value={definition.equipment ?? ''} placeholder="Турник, тренажёр…" onChange={event => edit(definition.id, target => { target.equipment = event.target.value || undefined })} /></label><label className="catalog-note">Подсказка<textarea value={definition.notes ?? ''} placeholder="Техника или важное напоминание" onChange={event => edit(definition.id, target => { target.notes = event.target.value || undefined })} /></label></div></article>)}</div> : <p className="catalog-empty">Упражнения появятся здесь после добавления в программу.</p>}
+    {items.length ? <div className="catalog-list">{items.map(definition => <article className="catalog-row" key={definition.id}><div className="catalog-row-head"><span><strong>{definition.name}</strong><small>{knownZone(definition.category) ? EXERCISE_ZONES.find(zone => zone.value === definition.category)?.label : 'Без зоны'}</small></span><span className="catalog-card-actions"><button className={definition.favorite ? 'favorite active' : 'favorite'} aria-label={definition.favorite ? `Убрать ${definition.name} из избранного` : `Добавить ${definition.name} в избранное`} onClick={() => edit(definition.id, target => { target.favorite = !target.favorite })}>{definition.favorite ? '★' : '☆'}</button><button className="catalog-delete" aria-label={`Удалить ${definition.name}`} onClick={() => remove(definition)}>×</button></span></div><div className="catalog-fields"><label>Зона<select aria-label={`Зона упражнения ${definition.name}`} value={knownZone(definition.category) ? definition.category : ''} onChange={event => edit(definition.id, target => { target.category = event.target.value || undefined })}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></label><label>Оборудование<input value={definition.equipment ?? ''} placeholder="Турник, тренажёр…" onChange={event => edit(definition.id, target => { target.equipment = event.target.value || undefined })} /></label><label className="catalog-note">Подсказка<textarea value={definition.notes ?? ''} placeholder="Техника или важное напоминание" onChange={event => edit(definition.id, target => { target.notes = event.target.value || undefined })} /></label></div></article>)}</div> : <p className="catalog-empty">Упражнения появятся здесь после добавления в программу.</p>}
   </section>
 }
 
