@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ActualSet, AppState, Program, Workout } from './types'
-import { categoryTrainingActivity, compareSets, continueFreeWorkout, fromKg, nextPosition, previousWorkoutForExercise, removeExerciseDefinition, startWorkout, switchExerciseUnit, timerRemaining, toKg, trainingSummary } from './domain'
+import { achievementCatalog, categoryTrainingActivity, compareSets, continueFreeWorkout, fromKg, nextPosition, previousWorkoutForExercise, removeExerciseDefinition, startWorkout, switchExerciseUnit, syncAchievements, timerRemaining, toKg, trainingSummary } from './domain'
 
 const actual = (weightKg: number, reps: number, status: ActualSet['status'] = 'completed'): ActualSet => ({
   id: crypto.randomUUID(), templateSetId: crypto.randomUUID(), weightInput: `${weightKg}`, weightKg,
@@ -19,6 +19,24 @@ const baseProgram = (): Program => ({
     id: 'program-exercise-2', exerciseDefinitionId: 'squat', name: 'Присед', unit: 'kg', loadType: 'external', restBetweenSec: 60, restAfterSec: 0, note: '', sets: [{ id: 'q1', weightInput: '60', weightKg: 60, repsInput: '8' }],
   }],
 })
+
+const completedWorkoutAt = (finishedAt: string, weightKg = 60, reps = 8, setCount = 1): Workout => {
+  const workout = startWorkout(baseProgram())
+  workout.id = finishedAt
+  workout.status = 'completed'
+  workout.startedAt = finishedAt
+  workout.finishedAt = finishedAt
+  workout.exercises = workout.exercises.slice(0, 1)
+  workout.exercises[0].sets = Array.from({ length: setCount }, (_, index) => ({
+    ...(workout.exercises[0].sets[index] ?? workout.exercises[0].sets[0]),
+    id: `${finishedAt}-${index}`,
+    status: 'completed' as const,
+    actualWeightInput: `${weightKg}`,
+    actualWeightKg: weightKg,
+    actualRepsInput: `${reps}`,
+  }))
+  return workout
+}
 
 describe('unit conversion', () => {
   it('uses the exact pounds conversion and does not accumulate rounding', () => {
@@ -137,5 +155,37 @@ describe('exercise catalog cleanup', () => {
     expect(removeExerciseDefinition(state, 'lat-pulldown')).toBe('archived')
     expect(state.definitions[0].archived).toBe(true)
     expect(state.programs[0].exercises[0].exerciseDefinitionId).toBe('lat-pulldown')
+  })
+})
+
+describe('achievements', () => {
+  const stateWith = (workouts: Workout[]): AppState => ({ version: 1, definitions: [], programs: [], workouts, bodyWeights: [], measurements: [], imports: [], settings: { sound: false, vibration: false, keepAwake: false } })
+
+  it('unlocks a two-week streak with two workouts in each week', () => {
+    const state = stateWith([
+      completedWorkoutAt('2025-03-03T12:00:00.000Z'),
+      completedWorkoutAt('2025-03-05T12:00:00.000Z'),
+      completedWorkoutAt('2025-03-10T12:00:00.000Z'),
+      completedWorkoutAt('2025-03-12T12:00:00.000Z'),
+    ])
+    expect(achievementCatalog(state).find(item => item.id === 'rhythm_2x2')).toMatchObject({ progress: 2, unlocked: true })
+  })
+
+  it('recognizes progress in weight, repetitions, and completed sets', () => {
+    const state = stateWith([
+      completedWorkoutAt('2025-03-03T12:00:00.000Z', 60, 8, 1),
+      completedWorkoutAt('2025-03-10T12:00:00.000Z', 70, 13, 2),
+    ])
+    const unlocked = achievementCatalog(state).filter(item => item.unlocked).map(item => item.id)
+    expect(unlocked).toEqual(expect.arrayContaining(['weight_up_1', 'weight_jump_10', 'reps_up_1', 'sets_up_1']))
+  })
+
+  it('stores each unlocked achievement only once and keeps it earned', () => {
+    const state = stateWith([completedWorkoutAt('2025-03-03T12:00:00.000Z')])
+    expect(syncAchievements(state, '2025-03-03T13:00:00.000Z')).toContain('first_workout')
+    expect(syncAchievements(state, '2025-03-03T14:00:00.000Z')).toEqual([])
+    expect(state.achievements?.filter(item => item.id === 'first_workout')).toHaveLength(1)
+    state.workouts = []
+    expect(achievementCatalog(state).find(item => item.id === 'first_workout')?.unlocked).toBe(true)
   })
 })

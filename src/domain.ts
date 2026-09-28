@@ -203,6 +203,109 @@ export function categoryTrainingActivity(state: AppState, categories: readonly s
   })
 }
 
+export interface AchievementProgress {
+  id: string
+  title: string
+  description: string
+  icon: string
+  progress: number
+  target: number
+  unlocked: boolean
+  unlockedAt?: string
+}
+
+function maxWeekStreak(workouts: Workout[], minimumSessions: number): number {
+  const counts = new Map<number, number>()
+  workouts.forEach(workout => {
+    const date = new Date(workout.finishedAt ?? workout.startedAt)
+    const dayFromMonday = (date.getUTCDay() + 6) % 7
+    date.setUTCHours(0, 0, 0, 0)
+    date.setUTCDate(date.getUTCDate() - dayFromMonday)
+    const week = date.getTime()
+    counts.set(week, (counts.get(week) ?? 0) + 1)
+  })
+  const qualifying = [...counts.entries()].filter(([, count]) => count >= minimumSessions).map(([week]) => week).sort((a, b) => a - b)
+  let best = 0; let current = 0; let previous: number | undefined
+  qualifying.forEach(week => {
+    current = previous !== undefined && week - previous === 7 * 86400000 ? current + 1 : 1
+    best = Math.max(best, current); previous = week
+  })
+  return best
+}
+
+export function achievementCatalog(state: AppState): AchievementProgress[] {
+  const workouts = state.workouts.filter(workout => workout.status === 'completed').slice().sort((a, b) => Date.parse(a.finishedAt ?? a.startedAt) - Date.parse(b.finishedAt ?? b.startedAt))
+  const completedSets = workouts.reduce((total, workout) => total + workout.exercises.reduce((sum, exercise) => sum + exercise.sets.filter(set => set.status === 'completed').length, 0), 0)
+  const perfectWorkouts = workouts.filter(workout => { const sets = workout.exercises.flatMap(exercise => exercise.sets); return sets.length > 0 && sets.every(set => set.status === 'completed') }).length
+  const maxVolume = workouts.reduce((best, workout) => Math.max(best, workoutVolumeKg(workout)), 0)
+  const previous = new Map<string, { weight: number | null; reps: number; sets: number }>()
+  let weightUps = 0; let repsUps = 0; let setUps = 0; let maxWeightJump = 0
+  workouts.forEach(workout => workout.exercises.forEach(exercise => {
+    const completed = exercise.sets.filter(set => set.status === 'completed')
+    if (!completed.length) return
+    const weightValues = completed.map(set => set.actualWeightKg).filter((value): value is number => value !== null)
+    const bestWeight = weightValues.length ? Math.max(...weightValues) : null
+    const bestReps = Math.max(...completed.map(set => parseReps(set.actualRepsInput) ?? 0))
+    const before = previous.get(exercise.exerciseDefinitionId)
+    if (before) {
+      if (bestWeight !== null && before.weight !== null && bestWeight > before.weight + .00001) { weightUps += 1; maxWeightJump = Math.max(maxWeightJump, bestWeight - before.weight) }
+      if (bestReps > before.reps) repsUps += 1
+      if (completed.length > before.sets) setUps += 1
+    }
+    previous.set(exercise.exerciseDefinitionId, { weight: bestWeight === null ? before?.weight ?? null : Math.max(before?.weight ?? 0, bestWeight), reps: Math.max(before?.reps ?? 0, bestReps), sets: Math.max(before?.sets ?? 0, completed.length) })
+  }))
+  const metrics = {
+    workouts: workouts.length,
+    completedSets,
+    streak2: maxWeekStreak(workouts, 2),
+    streak3: maxWeekStreak(workouts, 3),
+    weightUps,
+    repsUps,
+    setUps,
+    maxWeightJump,
+    maxVolume,
+    perfectWorkouts,
+  }
+  const definitions: Array<Omit<AchievementProgress, 'progress' | 'unlocked' | 'unlockedAt'> & { value: number }> = [
+    { id: 'first_workout', icon: '🐾', title: 'Первый след', description: 'Заверши первую тренировку', value: metrics.workouts, target: 1 },
+    { id: 'workouts_5', icon: '🔥', title: 'Разогнался', description: 'Заверши 5 тренировок', value: metrics.workouts, target: 5 },
+    { id: 'workouts_10', icon: '⚡', title: 'Десятка силы', description: 'Заверши 10 тренировок', value: metrics.workouts, target: 10 },
+    { id: 'workouts_25', icon: '🏅', title: 'Серьёзный настрой', description: 'Заверши 25 тренировок', value: metrics.workouts, target: 25 },
+    { id: 'workouts_50', icon: '🏆', title: 'Полсотни', description: 'Заверши 50 тренировок', value: metrics.workouts, target: 50 },
+    { id: 'sets_50', icon: '🔩', title: 'Рабочий режим', description: 'Выполни 50 подходов', value: metrics.completedSets, target: 50 },
+    { id: 'sets_250', icon: '🦾', title: 'Стальная машина', description: 'Выполни 250 подходов', value: metrics.completedSets, target: 250 },
+    { id: 'sets_1000', icon: '🤖', title: 'Тысяча подходов', description: 'Выполни 1000 подходов', value: metrics.completedSets, target: 1000 },
+    { id: 'rhythm_2x2', icon: '📅', title: 'Вошёл в ритм', description: 'Минимум 2 тренировки в неделю 2 недели подряд', value: metrics.streak2, target: 2 },
+    { id: 'rhythm_2x4', icon: '🗓️', title: 'Месяц постоянства', description: 'Минимум 2 тренировки в неделю 4 недели подряд', value: metrics.streak2, target: 4 },
+    { id: 'rhythm_3x4', icon: '🚀', title: 'Не остановить', description: 'Минимум 3 тренировки в неделю 4 недели подряд', value: metrics.streak3, target: 4 },
+    { id: 'weight_up_1', icon: '📈', title: 'Вес пошёл вверх', description: 'Впервые повысь лучший рабочий вес', value: metrics.weightUps, target: 1 },
+    { id: 'weight_up_5', icon: '🏋️', title: 'Прогрессивная нагрузка', description: 'Улучши рабочий вес 5 раз', value: metrics.weightUps, target: 5 },
+    { id: 'weight_jump_10', icon: '💥', title: 'Плюс десять', description: 'Подними рекорд упражнения сразу на 10 кг', value: metrics.maxWeightJump, target: 10 },
+    { id: 'reps_up_1', icon: '➕', title: 'Ещё один!', description: 'Впервые повысь рекорд повторений', value: metrics.repsUps, target: 1 },
+    { id: 'reps_up_5', icon: '🔁', title: 'Запас повторений', description: 'Повысь рекорд повторений 5 раз', value: metrics.repsUps, target: 5 },
+    { id: 'sets_up_1', icon: '🧱', title: 'Добавил подход', description: 'Впервые выполни больше подходов в упражнении', value: metrics.setUps, target: 1 },
+    { id: 'sets_up_5', icon: '🏗️', title: 'Строитель объёма', description: 'Добавь подходы к упражнениям 5 раз', value: metrics.setUps, target: 5 },
+    { id: 'volume_1000', icon: '⚙️', title: 'Тонна за тренировку', description: 'Набери 1000 кг объёма за тренировку', value: metrics.maxVolume, target: 1000 },
+    { id: 'volume_5000', icon: '🚂', title: 'Пять тонн', description: 'Набери 5000 кг объёма за тренировку', value: metrics.maxVolume, target: 5000 },
+    { id: 'volume_10000', icon: '🛸', title: 'Десять тонн', description: 'Набери 10 000 кг объёма за тренировку', value: metrics.maxVolume, target: 10000 },
+    { id: 'perfect_1', icon: '✨', title: 'Чистая работа', description: 'Заверши тренировку без пропусков', value: metrics.perfectWorkouts, target: 1 },
+    { id: 'perfect_10', icon: '💎', title: 'Без компромиссов', description: 'Заверши 10 тренировок без пропусков', value: metrics.perfectWorkouts, target: 10 },
+  ]
+  const unlocks = new Map((state.achievements ?? []).map(item => [item.id, item.unlockedAt]))
+  return definitions.map(definition => {
+    const unlockedAt = unlocks.get(definition.id)
+    return { id: definition.id, icon: definition.icon, title: definition.title, description: definition.description, progress: Math.min(definition.value, definition.target), target: definition.target, unlocked: definition.value >= definition.target || Boolean(unlockedAt), unlockedAt }
+  })
+}
+
+export function syncAchievements(state: AppState, unlockedAt = new Date().toISOString()): string[] {
+  state.achievements ??= []
+  const known = new Set(state.achievements.map(item => item.id))
+  const newlyUnlocked = achievementCatalog(state).filter(item => item.unlocked && !known.has(item.id))
+  newlyUnlocked.forEach(item => state.achievements!.push({ id: item.id, unlockedAt }))
+  return newlyUnlocked.map(item => item.id)
+}
+
 export function removeExerciseDefinition(state: AppState, definitionId: string): 'merged' | 'archived' | 'deleted' | 'missing' {
   const definition = state.definitions.find(item => item.id === definitionId)
   if (!definition) return 'missing'

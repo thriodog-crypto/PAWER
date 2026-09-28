@@ -81,6 +81,12 @@ export interface Workout {
   finishedAt?: string
   timer: RestTimer | null
   awaitingNextExercise?: boolean
+  achievementIds?: string[]
+}
+
+export interface AchievementUnlock {
+  id: string
+  unlockedAt: string
 }
 
 export interface BodyWeightEntry {
@@ -142,6 +148,7 @@ export interface AppState {
   bodyWeights: BodyWeightEntry[]
   measurements: MeasurementEntry[]
   imports: ImportRecord[]
+  achievements?: AchievementUnlock[]
   settings: Settings
 }
 
