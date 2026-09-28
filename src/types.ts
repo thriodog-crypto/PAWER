@@ -70,6 +70,7 @@ export interface Workout {
   startedAt: string
   finishedAt?: string
   timer: RestTimer | null
+  awaitingNextExercise?: boolean
 }
 
 export interface BodyWeightEntry {

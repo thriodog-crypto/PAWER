@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ActualSet, AppState, Program, Workout } from './types'
-import { compareSets, fromKg, nextPosition, previousWorkoutForExercise, startWorkout, switchExerciseUnit, timerRemaining, toKg } from './domain'
+import { compareSets, continueFreeWorkout, fromKg, nextPosition, previousWorkoutForExercise, startWorkout, switchExerciseUnit, timerRemaining, toKg } from './domain'
 
 const actual = (weightKg: number, reps: number, status: ActualSet['status'] = 'completed'): ActualSet => ({
   id: crypto.randomUUID(), templateSetId: crypto.randomUUID(), weightInput: `${weightKg}`, weightKg,
@@ -50,6 +50,13 @@ describe('timer transitions', () => {
   it('uses between-set rest after an intermediate set', () => expect(nextPosition(workout, 0, 0)).toEqual({ exerciseIndex: 0, setIndex: 1, restKind: 'between', restSec: 90 }))
   it('uses only after-exercise rest after the last set', () => expect(nextPosition(workout, 0, 2)).toEqual({ exerciseIndex: 1, setIndex: 0, restKind: 'after', restSec: 180 }))
   it('starts no rest after the last workout set', () => expect(nextPosition(workout, 1, 0)).toBeNull())
+  it('starts after-exercise rest before extending a free workout', () => {
+    const freeWorkout = startWorkout(null)
+    freeWorkout.exercises = structuredClone(workout.exercises.slice(0, 1))
+    continueFreeWorkout(freeWorkout, 10_000)
+    expect(freeWorkout.awaitingNextExercise).toBe(true)
+    expect(freeWorkout.timer).toEqual({ kind: 'after', durationSec: 180, remainingSec: 180, paused: false, endAt: 190_000 })
+  })
   it('calculates time from the persisted deadline', () => expect(timerRemaining({ endAt: 12_000, remainingSec: 90, paused: false }, 7_400)).toBe(5))
   it('preserves explicit pause duration', () => expect(timerRemaining({ endAt: null, remainingSec: 37, paused: true }, 999_999)).toBe(37))
 })

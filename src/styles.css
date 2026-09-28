@@ -186,9 +186,9 @@ h3 { font-size: 1.05rem; }
 .runner-empty { width: min(100% - 28px, 560px); margin: 18vh auto 0; padding: 24px; text-align: center; background: #fff; border: 1px solid var(--line); border-radius: 24px; }
 .runner-empty p { color: var(--muted); line-height: 1.6; }
 .runner-empty button + button { margin-top: 10px; }
-.workout-paused { max-width: 520px; margin: 12vh auto 0; padding: 28px 22px; border: 1px solid var(--line); border-radius: 24px; background: #fff; text-align: center; box-shadow: var(--shadow); }
-.workout-paused > span { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 20px; display: grid; place-items: center; color: var(--green); background: var(--mint-soft); font-size: 1.5rem; font-weight: 900; }
-.workout-paused p { margin: 10px 0 22px; color: var(--muted); line-height: 1.55; }
+.workout-paused, .workout-continue { max-width: 520px; margin: 12vh auto 0; padding: 28px 22px; border: 1px solid var(--line); border-radius: 24px; background: #fff; text-align: center; box-shadow: var(--shadow); }
+.workout-paused > span, .workout-continue > span { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 20px; display: grid; place-items: center; color: var(--green); background: var(--mint-soft); font-size: 1.5rem; font-weight: 900; }
+.workout-paused p, .workout-continue > p:not(.eyebrow) { margin: 10px 0 22px; color: var(--muted); line-height: 1.55; }
 .rest-screen { text-align: center; }
 .rest-screen > .eyebrow { margin-top: 14px; }
 .timer-ring { position: relative; width: min(72vw, 310px); aspect-ratio: 1; margin: 0 auto 18px; display: grid; place-items: center; }
@@ -558,7 +558,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 .custom-color input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 
 .quick-card, .program-card, .program-detail-card, .latest-card, .settings-card, .progress-panel,
-.history-card, .exercise-card, .actual-panel, .next-card, .runner-empty, .workout-paused,
+.history-card, .exercise-card, .actual-panel, .next-card, .runner-empty, .workout-paused, .workout-continue,
 .summary-exercises, .summary-metrics div {
   color: var(--ink);
   background: linear-gradient(155deg, rgb(var(--panel-light-rgb) / var(--panel-alpha)), rgb(var(--panel-dark-rgb) / var(--panel-alpha)));
@@ -567,7 +567,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
   backdrop-filter: blur(14px);
 }
 .quick-card:hover, .program-card:hover, .history-card:hover { border-color: rgb(var(--accent-rgb) / .42); }
-.quick-icon, .date-chip, .workout-paused > span { color: var(--green); background: rgb(var(--accent-rgb) / .1); border: 1px solid rgb(var(--accent-rgb) / .14); }
+.quick-icon, .date-chip, .workout-paused > span, .workout-continue > span { color: var(--green); background: rgb(var(--accent-rgb) / .1); border: 1px solid rgb(var(--accent-rgb) / .14); }
 .empty-state { color: var(--muted); background: rgb(var(--panel-rgb) / var(--panel-alpha)); border-color: rgb(var(--accent-rgb) / .27); backdrop-filter: blur(14px); }
 
 .bottom-nav {

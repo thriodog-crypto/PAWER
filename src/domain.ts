@@ -172,6 +172,16 @@ export function nextPosition(workout: Workout, exerciseIndex: number, setIndex: 
   return null
 }
 
+export function continueFreeWorkout(workout: Workout, now = Date.now()) {
+  const exercise = workout.exercises[workout.currentExerciseIndex]
+  if (!exercise) return
+  const restSec = exercise.restAfterSec
+  workout.awaitingNextExercise = true
+  workout.timer = restSec > 0
+    ? { kind: 'after', durationSec: restSec, remainingSec: restSec, paused: false, endAt: now + restSec * 1000 }
+    : null
+}
+
 export function timerRemaining(timer: { endAt: number | null; remainingSec: number; paused: boolean }, now = Date.now()) {
   if (timer.paused || timer.endAt === null) return Math.max(0, timer.remainingSec)
   return Math.max(0, Math.ceil((timer.endAt - now) / 1000))
