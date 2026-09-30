@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AnalyticsDashboard } from './AnalyticsDashboard'
+import { analyticsData } from './analytics'
 import { AchievementReward, RewardBadge, prepareRewardAudio, rewardStyle, rewardTheme } from './AchievementReward'
 import type { ActualSet, AppState, BodyWeightEntry, ExerciseDefinition, LoadType, MeasurementEntry, Program, ProgramExercise, SaveStatus, WeightUnit, Workout } from './types'
 import { backupJson, createAutoSnapshotIfNeeded, createLocalSnapshot, emptyState, listLocalSnapshots, loadState, parseBackup, saveState } from './storage'
@@ -645,13 +647,16 @@ function finishWorkout(update: (fn: (draft: AppState) => void) => void, id: stri
 
 function Progress({ data, update }: { data: AppState; update: (fn: (draft: AppState) => void) => void }) {
   const [section, setSection] = useState<ProgressTab>('strength')
+  const [details, setDetails] = useState(false)
+  const clean = analyticsData(data)
   return <>
-    <section className="page-title"><p className="eyebrow">Прогресс</p><h1>Результаты без догадок</h1></section>
-    <TrainingInsights data={data} />
+    {!details && <AnalyticsDashboard data={data} update={update} onDetails={next => { setSection(next); setDetails(true); window.scrollTo(0, 0) }} />}
+    {details && <><button className="secondary" onClick={() => { setDetails(false); window.scrollTo(0, 0) }}>← Аналитика прогресса</button>
     <div className="segmented three"><button className={section === 'strength' ? 'active' : ''} onClick={() => setSection('strength')}>Силовые</button><button className={section === 'body' ? 'active' : ''} onClick={() => setSection('body')}>Вес тела</button><button className={section === 'measurements' ? 'active' : ''} onClick={() => setSection('measurements')}>Замеры</button></div>
-    {section === 'strength' && <StrengthProgress data={data} />}
+    {section === 'strength' && <StrengthProgress data={clean} />}
     {section === 'body' && <BodyProgress data={data} update={update} />}
     {section === 'measurements' && <Measurements data={data} update={update} />}
+    </>}
   </>
 }
 

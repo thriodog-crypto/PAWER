@@ -121,6 +121,7 @@ export interface ImportRecord {
 }
 
 export interface Settings {
+  weeklyWorkoutGoal?: number
   bodyWeightGoalKg?: number
   sound: boolean
   vibration: boolean
