@@ -1,4 +1,5 @@
 import type { AppState } from './types'
+import { normalizeCoachData } from './coachData'
 
 const DB_NAME = 'wolf-fit-db'
 const STORE = 'state'
@@ -39,13 +40,21 @@ export async function loadState(): Promise<AppState> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly')
     const req = tx.objectStore(STORE).get(KEY)
-    req.onsuccess = () => resolve(validateState(req.result) ? req.result : emptyState())
+    req.onsuccess = () => resolve(validateState(req.result) ? normalizeCoachData(req.result) : emptyState())
     req.onerror = () => reject(req.error)
     tx.oncomplete = () => db.close()
   })
 }
 
-export async function saveState(state: AppState): Promise<void> {
+let saveQueue: Promise<void> = Promise.resolve()
+export function saveState(state: AppState): Promise<void> {
+  const copy = structuredClone(state)
+  const saving = saveQueue.catch(() => undefined).then(() => writeState(copy))
+  saveQueue = saving
+  return saving
+}
+
+async function writeState(state: AppState): Promise<void> {
   const db = await openDb()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite')
@@ -115,5 +124,5 @@ export function parseBackup(text: string): AppState {
   if (!parsed || typeof parsed !== 'object' || (parsed as { kind?: string }).kind !== 'wolf-fit-backup') throw new Error('Это не резервная копия PAWER')
   const data = (parsed as { data?: unknown }).data
   if (!validateState(data)) throw new Error('Формат копии повреждён или не поддерживается')
-  return data
+  return normalizeCoachData(data)
 }

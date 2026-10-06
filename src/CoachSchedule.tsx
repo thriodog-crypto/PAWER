@@ -1,0 +1,14 @@
+import type { AppState, ExerciseDefinition } from './types'
+import { nextTrainingDate } from './coach'
+export function CoachSchedule({ data }: { data: AppState }) {
+  const now = new Date(); const searchFrom = new Date(now)
+  if (data.workouts.some(w => w.status === 'completed' && new Date(w.finishedAt ?? w.startedAt).toDateString() === now.toDateString())) searchFrom.setDate(searchFrom.getDate() + 1)
+  const date = nextTrainingDate(data.settings.trainingDays ?? [], searchFrom)
+  return <section className="coach-card"><p className="eyebrow">Твой ритм</p><h2>{date ? `В плане: ${date.toLocaleDateString('ru', { weekday: 'long', day: 'numeric', month: 'long' })}` : 'Когда встретимся снова?'}</h2><p>{date ? 'Это выбранный тобой день, а не прогноз восстановления. Перед нагрузкой оцени сегодняшнее самочувствие.' : 'Выбери дни тренировок в профиле — здесь появится ближайший день. Без расписания мы не угадываем дату восстановления.'}</p></section>
+}
+export function CoachSettings({ data, update }: { data: AppState; update: (fn: (d: AppState) => void) => void }) {
+  return <section className="coach-card"><h2>Напарник PAWER</h2><p>Советы и оценки хранятся на устройстве. Без сервера и подписки.</p><fieldset><legend>Дни тренировок</legend><div className="coach-options">{(['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']).map((label, day) => <button key={day} aria-pressed={data.settings.trainingDays?.includes(day) ?? false} onClick={() => update(d => { const days = d.settings.trainingDays ?? []; d.settings.trainingDays = days.includes(day) ? days.filter(x => x !== day) : [...days, day] })}>{label}</button>)}</div></fieldset><fieldset><legend>Тон похвалы</legend><div className="coach-options">{([['playful', 'Игривый 🦴'], ['neutral', 'Нейтральный']] as const).map(([value, label]) => <button key={value} aria-pressed={(data.settings.coachTone ?? 'playful') === value} onClick={() => update(d => { d.settings.coachTone = value })}>{label}</button>)}</div></fieldset></section>
+}
+export function CoachLoadStep({ definition, onEdit }: { definition: ExerciseDefinition; onEdit: (fn: (d: ExerciseDefinition) => void) => void }) {
+  return <section className="coach-card"><h3>Шаг нагрузки</h3><p>Минимальная прибавка общего веса на этом тренажёре или снаряде. Без неё напарник не придумывает прибавку в килограммах.</p><label>Величина шага<input type="number" min="0.01" step="any" inputMode="decimal" value={definition.loadStep?.value ?? ''} placeholder="Не задан" onChange={e => onEdit(d => { const value = Number(e.target.value); d.loadStep = Number.isFinite(value) && value > 0 ? { value, unit: d.loadStep?.unit ?? 'kg' } : undefined })} /></label><label>Единица<select value={definition.loadStep?.unit ?? 'kg'} disabled={!definition.loadStep} onChange={e => onEdit(d => { if (d.loadStep) d.loadStep.unit = e.target.value === 'lb' ? 'lb' : 'kg' })}><option value="kg">кг</option><option value="lb">lb</option></select></label></section>
+}

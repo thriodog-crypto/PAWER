@@ -1,0 +1,17 @@
+.coach-card { padding: 22px; margin: 18px 0; border: 1px solid var(--line); border-radius: 24px; background: rgb(var(--panel-rgb) / .97); color: var(--ink); }
+.coach-card h2, .coach-card h3 { margin: 0 0 12px; }
+.coach-card p { color: var(--muted); line-height: 1.5; }
+.coach-card fieldset { border: 0; padding: 0; margin: 20px 0; min-width: 0; }
+.coach-card legend { margin-bottom: 10px; font-weight: 700; }
+.coach-options, .coach-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.coach-options button { border: 1px solid var(--line); border-radius: 14px; background: rgb(var(--panel-light-rgb) / .95); padding: 12px; min-height: 44px; color: var(--ink); }
+.coach-options button[aria-pressed=true] { border-color: var(--green); background: var(--mint-soft); color: var(--green); }
+.coach-comic { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 12px; }
+.coach-comic blockquote { position: relative; border-radius: 24px 24px 4px 24px; background: #fff4e5; color: #34281e; padding: 22px; margin: 0; font-size: 20px; font-weight: 700; line-height: 1.4; }
+.coach-comic img { width: 100%; height: 320px; object-fit: contain; border-radius: 18px; }
+.coach-advice { padding: 16px; border: 1px solid var(--line); border-radius: 18px; margin: 12px 0; }
+.coach-advice b, .coach-advice a { color: var(--green); }
+.coach-advice summary { cursor: pointer; margin-top: 12px; color: var(--muted); }
+.coach-card [role=alert] { color: #ffaaaa; }
+.coach-card label { display: grid; gap: 8px; margin-top: 16px; }
+@media (max-width: 540px) { .coach-card { padding: 16px; } .coach-comic { grid-template-columns: 1fr; } .coach-comic img { height: 260px; } .coach-comic blockquote { font-size: 18px; } .coach-actions > button { flex: 1; } }

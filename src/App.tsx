@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnalyticsDashboard } from './AnalyticsDashboard'
+import { WorkoutCoach } from './WorkoutCoach'
+import { prepareCoachFeedback } from './coachData'
+import { selectCoachPhrase } from './coach'
+import { CoachSettings, CoachSchedule, CoachLoadStep } from './CoachSchedule'
+import type { CoachFeedback, WorkoutExercise } from './types'
 import { analyticsData } from './analytics'
 import { AchievementReward, RewardBadge, prepareRewardAudio, rewardStyle, rewardTheme } from './AchievementReward'
 import type { ActualSet, AppState, BodyWeightEntry, ExerciseDefinition, LoadType, MeasurementEntry, Program, ProgramExercise, SaveStatus, WeightUnit, Workout } from './types'
@@ -138,6 +143,11 @@ export default function App() {
   const [viewWorkoutId, setViewWorkoutId] = useState<string | null>(null)
   const [summaryWorkoutId, setSummaryWorkoutId] = useState<string | null>(null)
   const firstSave = useRef(true)
+  const saveTimer = useRef<number | undefined>(undefined)
+  const coachSaving = useRef(false)
+  const dataRef = useRef(data)
+  dataRef.current = data
+  const [pendingStart, setPendingStart] = useState<{ program: Program | null } | null>(null)
 
   useEffect(() => {
     loadState().then(state => { const unlocked = syncAchievements(state); setData(state); if (unlocked.length) void saveState(state).catch(() => undefined); void createAutoSnapshotIfNeeded(state).catch(() => undefined) }).catch(() => setSaveStatus('error')).finally(() => setReady(true))
@@ -150,6 +160,7 @@ export default function App() {
     const timer = window.setTimeout(() => {
       saveState(data).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error'))
     }, 250)
+    saveTimer.current = timer
     return () => window.clearTimeout(timer)
   }, [data, ready])
 
@@ -209,15 +220,40 @@ export default function App() {
     return next
   })
 
+  const saveCoach = async (feedback: CoachFeedback, efforts: Record<string, WorkoutExercise['effort']>) => {
+    if (!summaryWorkout || coachSaving.current) throw Error('Сохранение уже идёт')
+    coachSaving.current = true
+    window.clearTimeout(saveTimer.current)
+    setSaveStatus('saving')
+    try {
+      // Save the completed workout first, independently of its optional assessment.
+      await saveState(data)
+      const next = await prepareCoachFeedback(data, summaryWorkout.id, feedback, efforts, createLocalSnapshot)
+      if (dataRef.current !== data) throw Error('Данные изменились; повтори сохранение')
+      next.workouts.find(w => w.id === summaryWorkout.id)!.coachFeedback!.phraseId = selectCoachPhrase(next, summaryWorkout.id).id
+      await saveState(next)
+      if (dataRef.current !== data) { await saveState(dataRef.current); throw Error('Данные изменились; повтори сохранение') }
+      setData(next); setSaveStatus('saved')
+    } catch (error) { setSaveStatus('error'); throw error }
+    finally { coachSaving.current = false }
+  }
+
   const start = (program: Program | null) => {
     const existing = data.workouts.find(w => w.status !== 'completed')
     if (existing) { setViewWorkoutId(existing.id); return }
+    setPendingStart({ program })
+  }
+  const begin = (wellbeing?: Workout['startWellbeing']) => {
+    if (!pendingStart) return
+    const program = pendingStart.program
     const workout = startWorkout(program)
+    workout.startWellbeing = wellbeing
     update(draft => {
       draft.workouts.unshift(workout)
-      workout.exercises.forEach(exercise => { const definition = draft.definitions.find(item => item.id === exercise.exerciseDefinitionId); if (definition) definition.lastUsedAt = workout.startedAt })
+      workout.exercises.forEach(exercise => { const definition = draft.definitions.find(item => item.id === exercise.exerciseDefinitionId); if (definition) { definition.lastUsedAt = workout.startedAt; exercise.equipmentSnapshot = definition.equipment?.trim() ?? '' } })
     })
     setViewWorkoutId(workout.id)
+    setPendingStart(null)
   }
 
   const saveEditingProgram = async () => {
@@ -261,7 +297,8 @@ export default function App() {
         <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon name={icon} /><span>{label}</span></button>)}
     </nav>
 
-    {summaryWorkout && <WorkoutSummary data={data} workout={summaryWorkout} update={update} onClose={() => setSummaryWorkoutId(null)} onDelete={() => update(draft => { draft.workouts = draft.workouts.filter(w => w.id !== summaryWorkout.id); setSummaryWorkoutId(null) })} onUpdateProgram={() => update(draft => updateProgramFromWorkout(draft, summaryWorkout))} />}
+    {summaryWorkout && <WorkoutSummary key={summaryWorkout.id} data={data} workout={summaryWorkout} update={update} saveStatus={saveStatus} onSaveCoach={saveCoach} onClose={() => setSummaryWorkoutId(null)} onDelete={() => update(draft => { draft.workouts = draft.workouts.filter(w => w.id !== summaryWorkout.id); setSummaryWorkoutId(null) })} onUpdateProgram={() => update(draft => updateProgramFromWorkout(draft, summaryWorkout))} />}
+    {pendingStart && <div className="summary-overlay" role="dialog" aria-modal="true" aria-label="Перед тренировкой"><div className="summary-page"><section className="coach-card"><h2>Как ты сегодня?</h2><p>Прошлая оценка не говорит о самочувствии сейчас. При боли или симптомах лучше отложить нагрузку и при необходимости обратиться к специалисту.</p><div className="coach-options"><button onClick={() => begin('good')}>Хорошо — начать</button><button onClick={() => begin('fatigued')}>Есть усталость</button><button onClick={() => begin('symptoms')}>Есть симптомы — открыть журнал без прогрессии</button><button onClick={() => begin()}>Начать без оценки</button><button onClick={() => setPendingStart(null)}>Не сейчас</button></div></section></div></div>}
   </div>
 }
 
@@ -280,6 +317,7 @@ function Home({ data, activeWorkout, onContinue, onStart, onPrograms, onEdit }: 
       <button className="quick-card" onClick={() => onStart(null)}><span className="quick-icon">＋</span><strong>Свободная тренировка</strong><small>Добавляй по ходу</small></button>
       <button className="quick-card" onClick={onPrograms}><span className="quick-icon">≡</span><strong>Мои программы</strong><small>{data.programs.length || 'Пока нет'}</small></button>
     </section>
+    <CoachSchedule data={data} />
 
     {latest && <section className="muscle-reminder"><div className="muscle-reminder-head"><div><p className="eyebrow">Баланс тренировок</p><h2>Какие мышцы давно не тренировались</h2></div><span>{staleMuscles.length ? `${staleMuscles.length} из ${EXERCISE_ZONES.length}` : 'Всё свежее ✓'}</span></div>{staleMuscles.length ? <div className="muscle-reminder-grid">{staleMuscles.map(item => { const zone = EXERCISE_ZONES.find(candidate => candidate.value === item.category)!; return <div key={item.category}><strong>{zone.label}</strong><small>{item.daysAgo === null ? 'Ещё не тренировались' : item.daysAgo === 7 ? '7 дней назад' : `${item.daysAgo} дн. назад`}</small></div> })}</div> : <p>Все отмеченные группы мышц были в работе за последние 7 дней.</p>}</section>}
 
@@ -607,7 +645,7 @@ function workoutExerciseForDefinition(state: AppState, definition: ExerciseDefin
     const templateSetId = isActual ? sourceSet.templateSetId : sourceSet.id
     return { id: uid(), templateSetId, weightInput, weightKg, repsInput, actualWeightInput: weightInput, actualWeightKg: weightKg, actualRepsInput: repsInput, status: 'pending' as const }
   })
-  return { id: uid(), exerciseDefinitionId: definition.id, name: definition.name, unit: base.unit, loadType: base.loadType, sets, restBetweenSec: base.restBetweenSec, restAfterSec: base.restAfterSec, note: base.note || definition.notes || '' }
+  return { id: uid(), exerciseDefinitionId: definition.id, name: definition.name, unit: base.unit, loadType: base.loadType, sets, restBetweenSec: base.restBetweenSec, restAfterSec: base.restAfterSec, note: base.note || definition.notes || '', equipmentSnapshot: definition.equipment?.trim() ?? '' }
 }
 
 function appendExerciseToWorkout(state: AppState, workoutId: string, definition: ExerciseDefinition) {
@@ -796,6 +834,7 @@ function Profile({ data, replaceData, update }: { data: AppState; replaceData: (
   }
   return <>
     <section className="page-title"><p className="eyebrow">Профиль</p><h1>Данные и настройки</h1></section>
+    <CoachSettings data={data} update={update} />
     <section className="device-banner"><span>⌁</span><div><strong>Данные хранятся на этом устройстве</strong><p>Это не облачная синхронизация. Регулярно сохраняй резервную копию.</p></div></section>
     <section className="settings-card appearance-card"><h2>Оформление</h2><p>Персонаж и обои сохраняются только на этом устройстве.</p>
       <div className="appearance-grid">
@@ -847,6 +886,7 @@ function ExerciseCatalog({ data, update }: { data: AppState; update: (fn: (draft
   </section>
   {selected && <div className="catalog-editor-overlay" role="dialog" aria-modal="true" aria-label={`Настройки упражнения ${selected.name}`}><header className="catalog-editor-header"><button className="back-button" onClick={() => setSelectedId(null)} aria-label="Вернуться к списку упражнений">‹</button><span><small>Настройка упражнения</small><strong>{selected.name}</strong></span><button className={selected.favorite ? 'favorite active' : 'favorite'} aria-label={selected.favorite ? 'Убрать из избранного' : 'Добавить в избранное'} onClick={() => edit(selected.id, target => { target.favorite = !target.favorite })}>{selected.favorite ? '★' : '☆'}</button></header><main className="catalog-editor-content">
     <section className="catalog-detail-card"><div className="catalog-fields"><label>Зона<select aria-label={`Зона упражнения ${selected.name}`} value={knownZone(selected.category) ? selected.category : ''} onChange={event => edit(selected.id, target => { target.category = event.target.value || undefined })}><option value="">Без зоны</option>{EXERCISE_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></label><label>Оборудование<input value={selected.equipment ?? ''} placeholder="Турник, тренажёр…" onChange={event => edit(selected.id, target => { target.equipment = event.target.value || undefined })} /></label><label className="catalog-note">Подсказка<textarea value={selected.notes ?? ''} placeholder="Техника или важное напоминание" onChange={event => edit(selected.id, target => { target.notes = event.target.value || undefined })} /></label></div></section>
+    <CoachLoadStep definition={selected} onEdit={fn => edit(selected.id, fn)} />
     <section className="catalog-detail-card"><ExerciseImageEditor definition={selected} dimPercent={data.settings.exerciseBackgroundDimPercent ?? 58} onEdit={fn => edit(selected.id, fn)} /></section>
     <button className="danger-outline wide catalog-detail-delete" onClick={() => remove(selected)}>Удалить упражнение из каталога</button>
   </main></div>}</>
@@ -954,8 +994,8 @@ async function fingerprintOf(value: string): Promise<string> {
   let hash = 0; for (let i = 0; i < value.length; i++) hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0; return `local-${hash}`
 }
 
-function WorkoutSummary({ data, workout, update, onClose, onDelete, onUpdateProgram }: { data: AppState; workout: Workout; update: (fn: (draft: AppState) => void) => void; onClose: () => void; onDelete: () => void; onUpdateProgram: () => void }) {
-  const [rewardOpen, setRewardOpen] = useState(() => Boolean(workout.achievementIds?.length) && sessionStorage.getItem(`reward-seen:${workout.id}`) !== 'true')
+export function WorkoutSummary({ data, workout, update, onClose, onDelete, onUpdateProgram, onSaveCoach, saveStatus }: { data: AppState; workout: Workout; update: (fn: (draft: AppState) => void) => void; onClose: () => void; onDelete: () => void; onUpdateProgram: () => void; onSaveCoach: (feedback: CoachFeedback, efforts: Record<string, WorkoutExercise['effort']>) => Promise<void>; saveStatus: SaveStatus }) {
+  const [rewardOpen, setRewardOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [savedAsProgram, setSavedAsProgram] = useState(false)
   const completed = workout.exercises.reduce((n, e) => n + e.sets.filter(s => s.status === 'completed').length, 0)
@@ -970,7 +1010,9 @@ function WorkoutSummary({ data, workout, update, onClose, onDelete, onUpdateProg
   })
   const gains = comparisons.filter(x => x.kind === 'better').length
   const declines = comparisons.filter(x => x.kind === 'worse').length
-  return <div className="summary-overlay" role="dialog" aria-modal="true"><div className="summary-page"><header className="summary-top"><button onClick={onClose}>×</button><span>{fmtDate(workout.finishedAt ?? workout.startedAt)}</span><button onClick={() => setEditing(x => !x)}>{editing ? 'Готово' : 'Исправить'}</button></header><section className="summary-hero"><div><p className="eyebrow">Тренировка сохранена</p><h1>{workout.programName}</h1><p>{gains ? `${gains} ${gains === 1 ? 'улучшение' : 'улучшения'} — отличный повод продолжать.` : 'Запись готова. Каждый честно отмеченный подход важен.'}</p></div><WolfArt compact src={data.settings.characterImageDataUrl} /></section>
+  return <div className="summary-overlay" role="dialog" aria-modal="true"><div className="summary-page"><header className="summary-top"><button onClick={onClose}>×</button><span>{fmtDate(workout.finishedAt ?? workout.startedAt)}</span><button onClick={() => setEditing(x => !x)}>{editing ? 'Готово' : 'Исправить'}</button></header><section className="summary-hero"><div><p className="eyebrow">{saveStatus === 'error' ? 'Не удалось сохранить — повтори ниже' : saveStatus === 'saving' ? 'Сохраняем тренировку…' : 'Итоги тренировки'}</p><h1>{workout.programName}</h1><p>{gains ? `${gains} ${gains === 1 ? 'улучшение' : 'улучшения'} — отличный повод продолжать.` : 'Каждый честно отмеченный подход важен.'}</p></div></section>
+    <SavePill status={saveStatus} />
+    <WorkoutCoach data={data} workoutId={workout.id} onSave={onSaveCoach} />
     {rewardOpen && newAchievements.length > 0 && <AchievementReward items={newAchievements} onClose={() => { sessionStorage.setItem(`reward-seen:${workout.id}`, 'true'); setRewardOpen(false) }} />}
     {newAchievements.length > 0 && <section className="achievement-celebration"><p className="eyebrow">Новые трофеи</p><h2>{praise}</h2><button className="secondary wide" onClick={() => { prepareRewardAudio(); setRewardOpen(true) }}>✦ Открыть награды · {newAchievements.length}</button></section>}
     <div className="summary-metrics"><div><strong>{durationMin}</strong><span>минут</span></div><div><strong>{completed}</strong><span>подходов</span></div><div><strong>{Math.round(workoutVolumeKg(workout)).toLocaleString('ru')}</strong><span>кг объёма</span></div></div>
@@ -990,7 +1032,7 @@ function updateProgramFromWorkout(state: AppState, workout: Workout) {
 function saveWorkoutAsProgram(state: AppState, workout: Workout) {
   if (state.programs.some(p => p.name === workout.programName && p.createdAt === workout.startedAt)) return
   const now = new Date().toISOString()
-  state.programs.push({ id: uid(), name: workout.programName === 'Свободная тренировка' ? `Свободная ${fmtDate(workout.startedAt)}` : workout.programName, createdAt: now, updatedAt: now, exercises: workout.exercises.map(ex => ({ ...ex, id: uid(), sets: ex.sets.filter(s => s.status === 'completed').map(s => ({ id: uid(), weightInput: s.actualWeightInput, weightKg: s.actualWeightKg, repsInput: s.actualRepsInput })) })) })
+  state.programs.push({ id: uid(), name: workout.programName === 'Свободная тренировка' ? `Свободная ${fmtDate(workout.startedAt)}` : workout.programName, createdAt: now, updatedAt: now, exercises: workout.exercises.map(ex => ({ ...ex, effort: undefined, equipmentSnapshot: undefined, id: uid(), sets: ex.sets.filter(s => s.status === 'completed').map(s => ({ id: uid(), weightInput: s.actualWeightInput, weightKg: s.actualWeightKg, repsInput: s.actualRepsInput })) })) })
 }
 
 function Empty({ title, text, action, onAction }: { title: string; text: string; action?: string; onAction?: () => void }) {

@@ -3,6 +3,7 @@ export type LoadType = 'external' | 'bodyweight' | 'assisted'
 export type SetStatus = 'pending' | 'completed' | 'skipped'
 
 export interface ExerciseDefinition {
+  loadStep?: { value: number; unit: WeightUnit }
   id: string
   name: string
   category?: string
@@ -57,6 +58,8 @@ export interface ActualSet extends PlannedSet {
 }
 
 export interface WorkoutExercise extends Omit<ProgramExercise, 'sets'> {
+  effort?: 'easy' | 'normal' | 'limit'
+  equipmentSnapshot?: string
   sets: ActualSet[]
 }
 
@@ -69,6 +72,8 @@ export interface RestTimer {
 }
 
 export interface Workout {
+  startWellbeing?: 'good' | 'fatigued' | 'symptoms'
+  coachFeedback?: CoachFeedback
   id: string
   programId: string | null
   programName: string
@@ -121,6 +126,9 @@ export interface ImportRecord {
 }
 
 export interface Settings {
+  coachTone?: 'playful' | 'neutral'
+  trainingDays?: number[]
+  coachBackupAt?: string
   weeklyWorkoutGoal?: number
   bodyWeightGoalKg?: number
   sound: boolean
@@ -154,3 +162,10 @@ export interface AppState {
 }
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+export interface CoachFeedback {
+  context?: 'normal' | 'light' | 'returning' | 'time'
+  wellbeing?: 'good' | 'fatigued' | 'symptoms'
+  reviewedAt?: string
+  phraseId?: string
+}

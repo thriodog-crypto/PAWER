@@ -86,6 +86,8 @@ export function startWorkout(program: Program | null, name = 'Свободная
     programSnapshot: snapshot,
     exercises: (snapshot?.exercises ?? []).map(ex => ({
       ...ex,
+      effort: undefined,
+      equipmentSnapshot: undefined,
       sets: ex.sets.map(set => ({
         ...set,
         weightInput: ex.loadType === 'bodyweight' ? '' : set.weightInput,
