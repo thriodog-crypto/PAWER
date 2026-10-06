@@ -21,3 +21,10 @@ Final: minor (deferred): no explanatory effort-rating legend beyond the three la
 Final: minor (deferred): failed coach image is hidden, with the speech text retained, rather than WolfArt fallback.
 Verification: 61/61 tests; pnpm build passes; git diff --check clean. Browser at 390×844 verified start wellbeing, exercise creation, set entry and rest. Browser automation stalled on native finish confirm; fresh tab also unresponsive. Final visual screenshot/reload validation remains unverified; DOM component tests cover skip/save/failure/edit instead.
 Ruling: preserve feature/local-coach locally without another approval question or production push — user requested no repeated confirmations; production verification is not complete — site has not changed yet.
+
+## Publication continuation — 2026-10-06
+
+User explicitly requested to continue through publication. Previous local-only ruling is superseded.
+Fresh verification: 61/61 tests, production build and diff check pass.
+Browser QA completed on local synthetic workout: partial workout finish → optional returning/good/normal assessment → support art and no-progression advice → reload → history. Assessment/phrase persisted and questionnaire did not reopen. At 390px viewport the document scroll width was 381px; art loaded with contain at 314×260. Screenshot capture remains unavailable in the browser backend; DOM and loaded-image checks succeeded.
+Publication target confirmed from existing workflow: origin/main → GitHub Pages at https://thriodog-crypto.github.io/PAWER/. Remote main f605e6a is an ancestor of the reviewed branch; fast-forward only, no force push.
