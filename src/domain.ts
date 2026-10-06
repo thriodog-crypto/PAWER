@@ -236,7 +236,7 @@ function maxWeekStreak(workouts: Workout[], minimumSessions: number): number {
 }
 
 export function achievementCatalog(state: AppState): AchievementProgress[] {
-  const workouts = state.workouts.filter(workout => workout.status === 'completed').slice().sort((a, b) => Date.parse(a.finishedAt ?? a.startedAt) - Date.parse(b.finishedAt ?? b.startedAt))
+  const workouts = state.workouts.filter(workout => workout.status === 'completed' && workout.exercises.some(exercise => exercise.sets.some(set => set.status === 'completed'))).slice().sort((a, b) => Date.parse(a.finishedAt ?? a.startedAt) - Date.parse(b.finishedAt ?? b.startedAt))
   const completedSets = workouts.reduce((total, workout) => total + workout.exercises.reduce((sum, exercise) => sum + exercise.sets.filter(set => set.status === 'completed').length, 0), 0)
   const perfectWorkouts = workouts.filter(workout => { const sets = workout.exercises.flatMap(exercise => exercise.sets); return sets.length > 0 && sets.every(set => set.status === 'completed') }).length
   const maxVolume = workouts.reduce((best, workout) => Math.max(best, workoutVolumeKg(workout)), 0)
@@ -295,16 +295,22 @@ export function achievementCatalog(state: AppState): AchievementProgress[] {
   ]
   const unlocks = new Map((state.achievements ?? []).map(item => [item.id, item.unlockedAt]))
   return definitions.map(definition => {
-    const unlockedAt = unlocks.get(definition.id)
-    return { id: definition.id, icon: definition.icon, title: definition.title, description: definition.description, progress: Math.min(definition.value, definition.target), target: definition.target, unlocked: definition.value >= definition.target || Boolean(unlockedAt), unlockedAt }
+    const unlocked = definition.value >= definition.target
+    const unlockedAt = unlocked ? unlocks.get(definition.id) : undefined
+    return { id: definition.id, icon: definition.icon, title: definition.title, description: definition.description, progress: Math.min(definition.value, definition.target), target: definition.target, unlocked, unlockedAt }
   })
 }
 
 export function syncAchievements(state: AppState, unlockedAt = new Date().toISOString()): string[] {
   state.achievements ??= []
   const known = new Set(state.achievements.map(item => item.id))
-  const newlyUnlocked = achievementCatalog(state).filter(item => item.unlocked && !known.has(item.id))
-  newlyUnlocked.forEach(item => state.achievements!.push({ id: item.id, unlockedAt }))
+  const earned = achievementCatalog(state).filter(item => item.unlocked)
+  const newlyUnlocked = earned.filter(item => !known.has(item.id))
+  state.achievements = earned.map(item => ({ id: item.id, unlockedAt: item.unlockedAt ?? unlockedAt }))
+  const earnedIds = new Set(earned.map(item => item.id))
+  state.workouts.forEach(workout => {
+    if (workout.achievementIds) workout.achievementIds = workout.achievementIds.filter(id => earnedIds.has(id))
+  })
   return newlyUnlocked.map(item => item.id)
 }
 

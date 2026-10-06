@@ -150,7 +150,7 @@ export default function App() {
   const [pendingStart, setPendingStart] = useState<{ program: Program | null } | null>(null)
 
   useEffect(() => {
-    loadState().then(state => { const unlocked = syncAchievements(state); setData(state); if (unlocked.length) void saveState(state).catch(() => undefined); void createAutoSnapshotIfNeeded(state).catch(() => undefined) }).catch(() => setSaveStatus('error')).finally(() => setReady(true))
+    loadState().then(state => { const previous = JSON.stringify([state.achievements, state.workouts.map(w => w.achievementIds)]); syncAchievements(state); setData(state); if (previous !== JSON.stringify([state.achievements, state.workouts.map(w => w.achievementIds)])) void saveState(state).catch(() => setSaveStatus('error')); void createAutoSnapshotIfNeeded(state).catch(() => undefined) }).catch(() => setSaveStatus('error')).finally(() => setReady(true))
   }, [])
 
   useEffect(() => {
@@ -217,6 +217,7 @@ export default function App() {
   const update = (fn: (draft: AppState) => void) => setData(current => {
     const next = structuredClone(current)
     fn(next)
+    syncAchievements(next)
     return next
   })
 
@@ -289,7 +290,7 @@ export default function App() {
       {tab === 'home' && <Home data={data} activeWorkout={activeWorkout} onContinue={() => setViewWorkoutId(activeWorkout?.id ?? null)} onStart={start} onPrograms={() => setTab('workouts')} onEdit={setEditingProgramId} />}
       {tab === 'workouts' && <Workouts data={data} update={update} onEdit={setEditingProgramId} onStart={start} onOpenWorkout={id => setSummaryWorkoutId(id)} />}
       {tab === 'progress' && <Progress data={data} update={update} />}
-      {tab === 'profile' && <Profile data={data} replaceData={setData} update={update} />}
+      {tab === 'profile' && <Profile data={data} replaceData={state => { syncAchievements(state); setData(state) }} update={update} />}
     </main>
 
     <nav className="bottom-nav" aria-label="Основная навигация">
@@ -1001,7 +1002,7 @@ export function WorkoutSummary({ data, workout, update, onClose, onDelete, onUpd
   const completed = workout.exercises.reduce((n, e) => n + e.sets.filter(s => s.status === 'completed').length, 0)
   const skipped = workout.exercises.reduce((n, e) => n + e.sets.filter(s => s.status === 'skipped').length, 0)
   const durationMin = Math.max(1, Math.round((Date.parse(workout.finishedAt ?? new Date().toISOString()) - Date.parse(workout.startedAt)) / 60000))
-  const newAchievements = achievementCatalog(data).filter(item => workout.achievementIds?.includes(item.id))
+  const newAchievements = achievementCatalog(data).filter(item => item.unlocked && workout.achievementIds?.includes(item.id))
   const praise = ['Мощно! Ты становишься сильнее.', 'Вот это темп! Продолжай в том же духе.', 'Отличная работа — привычка крепнет.', 'PAWER тобой гордится!'][workout.id.length % 4]
   const comparisons = workout.exercises.flatMap(ex => {
     const previous = previousWorkoutForExercise(data, workout, ex.exerciseDefinitionId)

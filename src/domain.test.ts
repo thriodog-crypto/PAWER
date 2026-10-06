@@ -180,12 +180,44 @@ describe('achievements', () => {
     expect(unlocked).toEqual(expect.arrayContaining(['weight_up_1', 'weight_jump_10', 'reps_up_1', 'sets_up_1']))
   })
 
-  it('stores each unlocked achievement only once and keeps it earned', () => {
+  it('stores each achievement once and relocks it when its history is removed', () => {
     const state = stateWith([completedWorkoutAt('2025-03-03T12:00:00.000Z')])
     expect(syncAchievements(state, '2025-03-03T13:00:00.000Z')).toContain('first_workout')
     expect(syncAchievements(state, '2025-03-03T14:00:00.000Z')).toEqual([])
     expect(state.achievements?.filter(item => item.id === 'first_workout')).toHaveLength(1)
     state.workouts = []
-    expect(achievementCatalog(state).find(item => item.id === 'first_workout')?.unlocked).toBe(true)
+    expect(achievementCatalog(state).find(item => item.id === 'first_workout')).toMatchObject({ unlocked: false, progress: 0, unlockedAt: undefined })
+    expect(syncAchievements(state)).toEqual([])
+    expect(state.achievements).toEqual([])
+  })
+
+  it('revokes deleted progress but keeps achievements supported by other workouts', () => {
+    const baseline = completedWorkoutAt('2025-03-03T12:00:00.000Z', 60, 8, 1)
+    const test = completedWorkoutAt('2025-03-10T12:00:00.000Z', 70, 13, 2)
+    const state = stateWith([baseline, test])
+    test.achievementIds = syncAchievements(state, '2025-03-10T13:00:00.000Z')
+    state.workouts = [baseline]
+    syncAchievements(state)
+    expect(state.achievements?.map(a => a.id)).toEqual(['first_workout', 'perfect_1'])
+    expect(state.achievements?.[0].unlockedAt).toBe('2025-03-10T13:00:00.000Z')
+    state.workouts.push(test)
+    expect(syncAchievements(state)).toEqual(expect.arrayContaining(['weight_up_1', 'reps_up_1', 'sets_up_1']))
+    expect(syncAchievements(state)).toEqual([])
+  })
+
+  it('cleans stale reward references when recorded results are corrected', () => {
+    const state = stateWith([completedWorkoutAt('2025-03-03T12:00:00.000Z', 60, 8, 1), completedWorkoutAt('2025-03-10T12:00:00.000Z', 70, 13, 2)])
+    const last = state.workouts[1]
+    last.achievementIds = syncAchievements(state)
+    last.exercises[0].sets.forEach(s => { s.actualWeightKg = 60; s.actualRepsInput = '8' })
+    syncAchievements(state)
+    expect(last.achievementIds).not.toContain('weight_up_1')
+    expect(last.achievementIds).not.toContain('reps_up_1')
+    expect(last.achievementIds).toContain('sets_up_1')
+  })
+
+  it('does not award workout counts or streaks for empty completed sessions', () => {
+    const w = completedWorkoutAt('2025-03-03T12:00:00.000Z'); w.exercises = []
+    expect(syncAchievements(stateWith([w]))).toEqual([])
   })
 })
