@@ -104,16 +104,21 @@ function contextFor(data: AppState, w: Workout): CoachContext {
   return before.length >= 2 ? 'regular' : 'partial'
 }
 
-export function selectCoachPhrase(data: AppState, id: string): {id:string;text:string;art:'proud'|'record'|'support'|'treat'} {
+export function selectCoachPhrase(data: AppState, id: string): {id:string;text:string;art:string} {
   const w = data.workouts.find(w => w.id === id)
   const context = w ? contextFor(data, w) : 'empty'
   const tone = data.settings.coachTone ?? 'playful'
   const lines = coachCopy[context][tone]
   const prefix = `${context}:${tone}:`
   const old = w?.coachFeedback?.phraseId
-  const previous = data.workouts.filter(x => x.id !== id && w && stamp(x) < stamp(w)).sort((a, b) => stamp(b) - stamp(a)).slice(0, 3).map(x => x.coachFeedback?.phraseId)
+  const usage = lines.map(() => 0)
+  for (const previous of data.workouts) {
+    if (!w || previous.id === id || stamp(previous) >= stamp(w)) continue
+    const match = previous.coachFeedback?.phraseId?.match(/^([^:]+):(playful|neutral):(\d+)$/)
+    if (match?.[1] === context && Number(match[3]) < usage.length) usage[Number(match[3])]++
+  }
   const oldIndex = old?.startsWith(prefix) ? Number(old.slice(prefix.length)) : -1
-  const index = oldIndex >= 0 && Number.isInteger(oldIndex) && oldIndex < lines.length ? oldIndex : Math.max(0, lines.findIndex((_, i) => !previous.includes(prefix + i)))
-  const art = context === 'record' ? 'record' : ['care', 'returning', 'light', 'partial', 'empty'].includes(context) ? 'support' : context === 'full' && index % 2 === 0 ? 'treat' : 'proud'
+  const index = oldIndex >= 0 && Number.isInteger(oldIndex) && oldIndex < lines.length ? oldIndex : usage.indexOf(Math.min(...usage))
+  const art = `phrases/${context}-${index}`
   return { id: prefix + index, text: lines[index], art }
 }

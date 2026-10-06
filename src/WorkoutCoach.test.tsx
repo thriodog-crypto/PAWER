@@ -36,11 +36,11 @@ it('keeps input and allows retry on storage failure', async () => {
   await click('Показать итоги'); expect(save).toHaveBeenLastCalledWith({ context: 'returning' }, {})
   expect(host.querySelector('img')).toBeTruthy()
 })
-it('opens reviewed history without a questionnaire and prioritizes custom art', async () => {
+it('opens reviewed history with phrase art instead of overriding it with the profile image', async () => {
   const { data, w } = fixture(); w.coachFeedback = { reviewedAt: new Date().toISOString() }; data.settings.characterImageDataUrl = 'custom.png'
   await act(async () => root.render(<WorkoutCoach data={data} workoutId={w.id} onSave={vi.fn()} />))
   expect(host.textContent).not.toContain('Как прошла тренировка?')
-  expect(host.querySelector('img')?.getAttribute('src')).toBe('custom.png')
+  expect(host.querySelector('img')?.getAttribute('src')).toBe('/coach-art/phrases/empty-0.png')
   await click('Исправить оценку'); expect(host.textContent).toContain('Как прошла тренировка?')
 })
 it('labels advice by definition ID and does not resurrect skipped effort', async () => {

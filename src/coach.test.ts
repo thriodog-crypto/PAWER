@@ -82,11 +82,32 @@ it('checks the original full plan rather than remaining exercises', () => {
 })
 it('selects protective phrases before records and avoids recent phrase ids', () => {
   const d = coachFixture(5); d.workouts[4].coachFeedback!.context = 'returning'
-  expect(selectCoachPhrase(d, 'w4').art).toBe('support')
+  expect(selectCoachPhrase(d, 'w4').art).toBe('phrases/returning-0')
   d.workouts[4].coachFeedback!.context = 'normal'
   const seen = new Set<string>()
   for (const w of d.workouts) { const p = selectCoachPhrase(d, w.id); expect(seen.has(p.id)).toBe(false); seen.add(p.id); w.coachFeedback!.phraseId = p.id }
   expect(selectCoachPhrase(d, 'w4').id).toBe(d.workouts[4].coachFeedback!.phraseId)
+})
+it('assigns different illustrations to different phrase variants, stable on reopening', () => {
+  const d = coachFixture(5)
+  const images = new Set<string>()
+  for (const w of d.workouts) {
+    const p = selectCoachPhrase(d, w.id)
+    expect(images.has(p.art)).toBe(false)
+    images.add(p.art); w.coachFeedback!.phraseId = p.id
+    expect(selectCoachPhrase(d, w.id).art).toBe(p.art)
+  }
+})
+it('uses every illustration in a context before repeating one, even after a tone change', () => {
+  const d = coachFixture(7)
+  const arts: string[] = []
+  for (const w of d.workouts) {
+    w.coachFeedback!.context = 'light'
+    if (w.id === 'w3') d.settings.coachTone = 'neutral'
+    const p = selectCoachPhrase(d, w.id); arts.push(p.art); w.coachFeedback!.phraseId = p.id
+  }
+  expect(new Set(arts.slice(0, 6)).size).toBe(6)
+  expect(arts[6]).toBe(arts[0])
 })
 it('plans local calendar dates without claiming recovery', () => {
   expect(nextTrainingDate([], new Date(2026, 9, 4))).toBeNull()
