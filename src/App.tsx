@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnalyticsDashboard } from './AnalyticsDashboard'
 import { WorkoutCoach } from './WorkoutCoach'
+import { WorkoutCalories } from './WorkoutCalories'
 import { prepareCoachFeedback } from './coachData'
 import { selectCoachPhrase } from './coach'
 import { CoachSettings, CoachSchedule, CoachLoadStep } from './CoachSchedule'
@@ -1013,6 +1014,7 @@ export function WorkoutSummary({ data, workout, update, onClose, onDelete, onUpd
   const declines = comparisons.filter(x => x.kind === 'worse').length
   return <div className="summary-overlay" role="dialog" aria-modal="true"><div className="summary-page"><header className="summary-top"><button onClick={onClose}>×</button><span>{fmtDate(workout.finishedAt ?? workout.startedAt)}</span><button onClick={() => setEditing(x => !x)}>{editing ? 'Готово' : 'Исправить'}</button></header><section className="summary-hero"><div><p className="eyebrow">{saveStatus === 'error' ? 'Не удалось сохранить — повтори ниже' : saveStatus === 'saving' ? 'Сохраняем тренировку…' : 'Итоги тренировки'}</p><h1>{workout.programName}</h1><p>{gains ? `${gains} ${gains === 1 ? 'улучшение' : 'улучшения'} — отличный повод продолжать.` : 'Каждый честно отмеченный подход важен.'}</p></div></section>
     <SavePill status={saveStatus} />
+    <WorkoutCalories data={data} workout={workout} update={update} />
     <WorkoutCoach data={data} workoutId={workout.id} onSave={onSaveCoach} />
     {rewardOpen && newAchievements.length > 0 && <AchievementReward items={newAchievements} onClose={() => { sessionStorage.setItem(`reward-seen:${workout.id}`, 'true'); setRewardOpen(false) }} />}
     {newAchievements.length > 0 && <section className="achievement-celebration"><p className="eyebrow">Новые трофеи</p><h2>{praise}</h2><button className="secondary wide" onClick={() => { prepareRewardAudio(); setRewardOpen(true) }}>✦ Открыть награды · {newAchievements.length}</button></section>}

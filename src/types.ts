@@ -72,6 +72,7 @@ export interface RestTimer {
 }
 
 export interface Workout {
+  calorieInputs?: { weightKg: number; minutes: number; intensity: 'standard' | 'vigorous' }
   startWellbeing?: 'good' | 'fatigued' | 'symptoms'
   coachFeedback?: CoachFeedback
   id: string
